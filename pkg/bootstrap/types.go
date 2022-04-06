@@ -34,6 +34,7 @@ type Bootstrapper struct {
 
 	accountEngineer       string
 	baseDomain            string
+	openrcSecretGroup     string
 	customer              string
 	pipeline              string
 	kindClusterName       string

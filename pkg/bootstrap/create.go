@@ -128,7 +128,7 @@ func (b *Bootstrapper) createCloudConfigSecret(ctx context.Context, k8sClient cl
 	}
 
 	project := strings.TrimPrefix(cloudConfigName, "cloud-config-")
-	openrcSecret, err := b.lastPassClient.GetSecret("Shared-Customers/THG", fmt.Sprintf("%s-openrc.sh", project))
+	openrcSecret, err := b.lastPassClient.GetSecret(fmt.Sprintf("Shared-Customers/%s", b.customer), fmt.Sprintf("%s-openrc.sh", project))
 	if err != nil {
 		return err
 	}
@@ -254,7 +254,6 @@ func (b *Bootstrapper) ensureBootstrapCluster(ctx context.Context) error {
 
 	return nil
 }
-
 
 func (b *Bootstrapper) installAppPlatform(ctx context.Context, permanent bool) error {
 	k8sClient := b.getClient(permanent)
