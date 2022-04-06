@@ -6,10 +6,12 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path"
+	"path/filepath"
 	"strings"
 
+	"github.com/google/go-github/v43/github"
 	core "k8s.io/api/core/v1"
-	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -18,6 +20,231 @@ import (
 	"github.com/giantswarm/capi-bootstrap/pkg/shell"
 	"github.com/giantswarm/capi-bootstrap/pkg/util"
 )
+
+func (b *Bootstrapper) loadPermanentKubeconfigFromLastPass() error {
+	secretGroup := fmt.Sprintf("Shared-%s/%s\\kubeconfigs", b.teamName, providerShort(b.provider))
+	secretName := fmt.Sprintf("%s.kubeconfig", b.managementClusterName)
+	kubeconfigSecret, err := b.lastPassClient.GetSecret(secretGroup, secretName)
+	if err != nil {
+		return err
+	}
+
+	err = b.loadPermanentKubeconfig([]byte(kubeconfigSecret.Note))
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (b *Bootstrapper) loadPermanentKubeconfig(data []byte) error {
+	kubeconfigFile, err := os.CreateTemp("", "kubeconfig")
+	if err != nil {
+		return err
+	}
+
+	b.permanent.KubeconfigPath = kubeconfigFile.Name()
+	err = os.WriteFile(b.permanent.KubeconfigPath, data, 0644)
+	if err != nil {
+		return err
+	}
+
+	b.permanent.K8sClient, err = util.KubeconfigToClient(data)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (b *Bootstrapper) loadPermanentKubeconfigFromBootstrap(ctx context.Context) error {
+	var secret core.Secret
+	err := b.bootstrap.K8sClient.Get(ctx, client.ObjectKey{
+		Name:      fmt.Sprintf("%s-kubeconfig", b.managementClusterName),
+		Namespace: b.clusterNamespace,
+	}, &secret)
+	if err != nil {
+		return err
+	}
+
+	return b.loadPermanentKubeconfig(secret.Data["value"])
+}
+
+func (b *Bootstrapper) moveCluster(ctx context.Context, bootstrapToPermanent bool) error {
+	var source ClusterScope
+	var target ClusterScope
+
+	if bootstrapToPermanent {
+		source = b.bootstrap
+		target = b.permanent
+	} else {
+		source = b.permanent
+		target = b.bootstrap
+	}
+
+	// 0. clusterctl move from source to target
+	_, stdErr, err := shell.Execute(shell.Command{
+		Name: "clusterctl",
+		Args: []string{
+			"move",
+			"--namespace",
+			b.clusterNamespace,
+			"--kubeconfig",
+			source.KubeconfigPath,
+			"--to-kubeconfig",
+			target.KubeconfigPath,
+		},
+		Tee: true,
+	})
+	if err != nil {
+		return fmt.Errorf("%q: %s", err, stdErr)
+	}
+
+	// 1. read cluster resources from input
+	clusterResources, err := decodeObjects(io.NopCloser(strings.NewReader(b.fileInputs)))
+	if err != nil {
+		return err
+	}
+
+	// 2. create cluster apps in target cluster to inherit moved cluster resources
+	err = applyResources(ctx, target.K8sClient, clusterResources)
+	if err != nil {
+		return err
+	}
+
+	// 3. wait for apps to become ready
+	err = waitForClusterReady(ctx, target.K8sClient, client.ObjectKey{
+		Name:      b.managementClusterName,
+		Namespace: b.clusterNamespace,
+	})
+	if err != nil {
+		return err
+	}
+
+	// 4. delete apps from source cluster
+	err = deleteResources(ctx, source.K8sClient, clusterResources)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (b *Bootstrapper) configureHelmCatalogRepo() error {
+	_, stdErr, err := shell.Execute(shell.Command{
+		Name: "helm",
+		Args: []string{
+			"repo",
+			"add",
+			"--force-update",
+			"control-plane-catalog",
+			"https://giantswarm.github.io/control-plane-catalog",
+		},
+	})
+	if err != nil {
+		return fmt.Errorf("%q: %s", err, stdErr)
+	}
+
+	_, stdErr, err = shell.Execute(shell.Command{
+		Name: "helm",
+		Args: []string{
+			"repo",
+			"update",
+		},
+	})
+	if err != nil {
+		return fmt.Errorf("%q: %s", err, stdErr)
+	}
+
+	return nil
+}
+
+func (b *Bootstrapper) cleanup() {
+	for _, file := range []string{
+		b.bootstrap.KubeconfigPath,
+		b.permanent.KubeconfigPath,
+	} {
+		if file == "" {
+			continue
+		}
+		_ = os.Remove(file) // explicitly ignore errors, file might not exist
+	}
+}
+
+func providerShort(provider string) string {
+	switch provider {
+	case "aws":
+		return "CAPA"
+	case "azure":
+		return "CAPZ"
+	case "gcp":
+		return "CAPG"
+	case "openstack":
+		return "CAPO"
+	case "vsphere":
+		return "CAPV"
+	default:
+		return ""
+	}
+}
+
+func (b *Bootstrapper) getClient(permanent bool) client.Client {
+	if permanent {
+		return b.permanent.K8sClient
+	}
+	return b.bootstrap.K8sClient
+}
+
+func (b *Bootstrapper) getKubeconfigPath(permanent bool) string {
+	if permanent {
+		return b.permanent.KubeconfigPath
+	}
+	return b.bootstrap.KubeconfigPath
+}
+
+func (b *Bootstrapper) fetchAppPlatformCRDs(ctx context.Context) ([]client.Object, error) {
+	owner := "giantswarm"
+	repo := "apiextensions-application"
+
+	latestRelease, _, err := b.gitHubClient.Repositories.GetLatestRelease(ctx, owner, repo)
+	if err != nil {
+		return nil, err
+	}
+
+	getOptions := github.RepositoryContentGetOptions{
+		Ref: "refs/tags/" + *latestRelease.TagName,
+	}
+
+	crdPath := path.Join("config", "crd")
+	_, contents, _, err := b.gitHubClient.Repositories.GetContents(ctx, "giantswarm", "apiextensions-application", crdPath, &getOptions)
+	if err != nil {
+		return nil, err
+	}
+
+	var crds []client.Object
+	for _, file := range contents {
+		if filepath.Ext(*file.Name) != ".yaml" {
+			continue
+		}
+
+		filePath := path.Join(crdPath, *file.Name)
+		contentReader, _, err := b.gitHubClient.Repositories.DownloadContents(ctx, "giantswarm", "apiextensions-application", filePath, &getOptions)
+		if err != nil {
+			return nil, err
+		}
+
+		entryCRDs, err := decodeCRDs(contentReader)
+		if err != nil {
+			return nil, err
+		}
+
+		for _, crd := range entryCRDs {
+			crds = append(crds, crd)
+		}
+	}
+
+	return crds, nil
+}
 
 func openrcToCloudConfig(content string) CloudConfig {
 	cloud := CloudConfigCloud{
@@ -96,326 +323,4 @@ func extractClusterCloudConfigName(clusterResources []client.Object) (string, er
 	}
 
 	return "", errors.New("cluster user values configmap not found")
-}
-
-func (b *Bootstrapper) createCloudConfigSecret(ctx context.Context, k8sClient client.Client, clusterResources []client.Object) error {
-	cloudConfigName, err := extractClusterCloudConfigName(clusterResources)
-	if err != nil {
-		return err
-	}
-
-	project := strings.TrimPrefix(cloudConfigName, "cloud-config-")
-	openrcSecret, err := b.lastPassClient.GetSecret("Shared-Customers/THG", fmt.Sprintf("%s-openrc.sh", project))
-	if err != nil {
-		return err
-	}
-
-	cloudConfig := openrcToCloudConfig(openrcSecret.Note)
-	cloudConfigYAML, err := yaml.Marshal(cloudConfig)
-	if err != nil {
-		return err
-	}
-
-	secret := core.Secret{
-		ObjectMeta: meta.ObjectMeta{
-			Labels: map[string]string{
-				"clusterctl.cluster.x-k8s.io/move": "true",
-			},
-			Name:      cloudConfigName,
-			Namespace: b.clusterNamespace,
-		},
-		StringData: map[string]string{
-			"clouds.yaml": string(cloudConfigYAML),
-		},
-	}
-
-	err = applyResources(ctx, k8sClient, []client.Object{&secret})
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (b *Bootstrapper) createCluster(ctx context.Context) error {
-	k8sClient := b.getClient(false)
-
-	// 0. ensure cluster namespace exists
-	err := createNamespace(ctx, k8sClient, b.clusterNamespace)
-	if err != nil {
-		return err
-	}
-
-	// 1. read cluster template as kubernetes objects
-	clusterResources, err := decodeObjects(io.NopCloser(strings.NewReader(b.fileInputs)))
-	if err != nil {
-		return err
-	}
-
-	// 2. create cloud config secret before creating cluster
-	err = b.createCloudConfigSecret(ctx, k8sClient, clusterResources)
-	if err != nil {
-		return err
-	}
-
-	// 3. create cluster resources
-	err = applyResources(ctx, k8sClient, clusterResources)
-	if err != nil {
-		return err
-	}
-
-	// 4. wait for cluster to become ready
-	err = waitForClusterReady(ctx, k8sClient, client.ObjectKey{
-		Name:      b.managementClusterName,
-		Namespace: b.clusterNamespace,
-	})
-	if err != nil {
-		return err
-	}
-
-	// 5. read kubeconfig for created "permanent" cluster
-	err = b.loadPermanentKubeconfigFromBootstrap(ctx)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (b *Bootstrapper) loadPermanentKubeconfigFromLastPass(ctx context.Context) error {
-	secretGroup := fmt.Sprintf("Shared-%s/%s\\kubeconfigs", b.teamName, providerShort(b.provider))
-	secretName := fmt.Sprintf("%s.kubeconfig", b.managementClusterName)
-	kubeconfigSecret, err := b.lastPassClient.GetSecret(secretGroup, secretName)
-	if err != nil {
-		return err
-	}
-
-	err = b.loadPermanentKubeconfig([]byte(kubeconfigSecret.Note))
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (b *Bootstrapper) loadPermanentKubeconfig(data []byte) error {
-	kubeconfigFile, err := os.CreateTemp("", "kubeconfig")
-	if err != nil {
-		return err
-	}
-
-	b.permanentKubeconfigPath = kubeconfigFile.Name()
-	err = os.WriteFile(b.permanentKubeconfigPath, data, 0644)
-	if err != nil {
-		return err
-	}
-
-	b.permanentK8sClient, err = util.KubeconfigToClient(data)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (b *Bootstrapper) loadPermanentKubeconfigFromBootstrap(ctx context.Context) error {
-	k8sClient := b.getClient(false)
-
-	var secret core.Secret
-	err := k8sClient.Get(ctx, client.ObjectKey{
-		Name:      fmt.Sprintf("%s-kubeconfig", b.managementClusterName),
-		Namespace: b.clusterNamespace,
-	}, &secret)
-	if err != nil {
-		return err
-	}
-
-	return b.loadPermanentKubeconfig(secret.Data["value"])
-}
-
-func (b *Bootstrapper) moveCluster(ctx context.Context, bootstrapToPermanent bool) error {
-	var sourceK8sClient client.Client
-	var sourceKubeconfigPath string
-	var targetK8sClient client.Client
-	var targetKubeconfigPath string
-
-	if bootstrapToPermanent {
-		sourceK8sClient = b.getClient(false)
-		sourceKubeconfigPath = b.getKubeconfigPath(false)
-		targetK8sClient = b.getClient(true)
-		targetKubeconfigPath = b.getKubeconfigPath(true)
-	} else {
-		sourceK8sClient = b.getClient(true)
-		sourceKubeconfigPath = b.getKubeconfigPath(true)
-		targetK8sClient = b.getClient(false)
-		targetKubeconfigPath = b.getKubeconfigPath(false)
-	}
-
-	// 0. clusterctl move from source to target
-	_, stdErr, err := shell.Execute(shell.Command{
-		Name: "clusterctl",
-		Args: []string{
-			"move",
-			"--namespace",
-			b.clusterNamespace,
-			"--kubeconfig",
-			sourceKubeconfigPath,
-			"--to-kubeconfig",
-			targetKubeconfigPath,
-		},
-		Tee: true,
-	})
-	if err != nil {
-		return fmt.Errorf("%q: %s", err, stdErr)
-	}
-
-	// 1. read cluster resources from input
-	clusterResources, err := decodeObjects(io.NopCloser(strings.NewReader(b.fileInputs)))
-	if err != nil {
-		return err
-	}
-
-	// 2. create cluster apps in target cluster to inherit moved cluster resources
-	err = applyResources(ctx, targetK8sClient, clusterResources)
-	if err != nil {
-		return err
-	}
-
-	// 3. wait for apps to become ready
-	err = waitForClusterReady(ctx, targetK8sClient, client.ObjectKey{
-		Name:      b.managementClusterName,
-		Namespace: b.clusterNamespace,
-	})
-	if err != nil {
-		return err
-	}
-
-	// 4. delete apps from source cluster
-	err = deleteResources(ctx, sourceK8sClient, clusterResources)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (b *Bootstrapper) setupMC(ctx context.Context, permanent bool) error {
-	err := b.installAppPlatform(ctx, permanent)
-	if err != nil {
-		return err
-	}
-
-	err = b.installCAPIControllers(ctx, permanent)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (b *Bootstrapper) ensureBootstrapCluster(ctx context.Context) error {
-	kubeconfigFile, err := os.CreateTemp("", "kubeconfig")
-	if err != nil {
-		return err
-	}
-
-	b.bootstrapKubeconfigPath = kubeconfigFile.Name()
-
-	var kubeconfigData []byte
-	if exists, err := b.kindClient.ClusterExists(b.kindClusterName); err != nil {
-		return err
-	} else if exists {
-		kubeconfigData, err = b.kindClient.GetKubeconfig(b.kindClusterName)
-		if err != nil {
-			return err
-		}
-
-		err = os.WriteFile(b.bootstrapKubeconfigPath, kubeconfigData, 0644)
-		if err != nil {
-			return err
-		}
-	} else {
-		kubeconfigData, err = b.kindClient.CreateCluster(b.kindClusterName, b.bootstrapKubeconfigPath)
-		if err != nil {
-			return err
-		}
-	}
-
-	b.bootstrapK8sClient, err = util.KubeconfigToClient(kubeconfigData)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (b *Bootstrapper) deleteBootstrapCluster() error {
-	if exists, err := b.kindClient.ClusterExists(b.kindClusterName); err != nil {
-		return err
-	} else if exists {
-		err = b.kindClient.DeleteCluster(b.kindClusterName)
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func (b *Bootstrapper) configureHelmCatalogRepo() error {
-	_, stdErr, err := shell.Execute(shell.Command{
-		Name: "helm",
-		Args: []string{
-			"repo",
-			"add",
-			"--force-update",
-			"control-plane-catalog",
-			"https://giantswarm.github.io/control-plane-catalog",
-		},
-	})
-	if err != nil {
-		return fmt.Errorf("%q: %s", err, stdErr)
-	}
-
-	_, stdErr, err = shell.Execute(shell.Command{
-		Name: "helm",
-		Args: []string{
-			"repo",
-			"update",
-		},
-	})
-	if err != nil {
-		return fmt.Errorf("%q: %s", err, stdErr)
-	}
-
-	return nil
-}
-
-func (b *Bootstrapper) cleanup() {
-	for _, file := range []string{
-		b.bootstrapKubeconfigPath,
-		b.permanentKubeconfigPath,
-	} {
-		if file == "" {
-			continue
-		}
-		_ = os.Remove(file) // explicitly ignore errors, file might not exist
-	}
-}
-
-func providerShort(provider string) string {
-	switch provider {
-	case "aws":
-		return "CAPA"
-	case "azure":
-		return "CAPZ"
-	case "gcp":
-		return "CAPG"
-	case "openstack":
-		return "CAPO"
-	case "vsphere":
-		return "CAPV"
-	default:
-		return ""
-	}
 }

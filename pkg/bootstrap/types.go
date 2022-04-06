@@ -48,11 +48,8 @@ type Bootstrapper struct {
 	lastPassClient lastpass.Client
 	opsctlClient   opsctl.Client
 
-	bootstrapK8sClient      client.Client
-	bootstrapKubeconfigPath string
-
-	permanentK8sClient      client.Client
-	permanentKubeconfigPath string
+	bootstrap ClusterScope
+	permanent ClusterScope
 }
 
 type CloudConfigCloudAuth struct {
@@ -104,4 +101,9 @@ type AppCatalogConfigConfigMapValues struct {
 	BaseDomain        string `json:"baseDomain"`
 	ManagementCluster string `json:"managementCluster"`
 	Provider          string `json:"provider"`
+}
+
+type ClusterScope struct {
+	KubeconfigPath string
+	K8sClient      client.Client
 }

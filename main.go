@@ -81,8 +81,8 @@ func mainE() error {
 		}
 	}
 
-	if f.Command == "apply" {
-		return bootstrapper.Apply(ctx)
+	if f.Command == "create" {
+		return bootstrapper.Create(ctx)
 	} else if f.Command == "delete" {
 		return bootstrapper.Delete(ctx)
 	}
