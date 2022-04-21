@@ -1,3 +1,5 @@
 package kind
 
-type Client struct{}
+type Client struct {
+	ClusterName string
+}

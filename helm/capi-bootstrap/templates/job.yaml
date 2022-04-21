@@ -1,0 +1,43 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "capi-bootstrap.name" . }}
+  namespace: {{ .Release.Namespace | quote }}
+  labels:
+    app: capi-bootstrap
+spec:
+  template:
+    metadata:
+      labels:
+        app: capi-bootstrap
+    spec:
+      serviceAccountName: {{ include "capi-bootstrap.name" . }}
+      securityContext:
+        runAsUser: 65534
+        runAsGroup: 65534
+      containers:
+      - name: capi-bootstrap
+        image: capi-bootstrap:1
+        command:
+        - capi-bootstrap
+        - init
+        - phase
+        - run
+        - --config-file
+        - /data/configmap/config
+        - --secret-directory
+        - /data/secret
+        volumeMounts:
+        - name: configmap
+          mountPath: /data/configmap
+        - name: secret
+          mountPath: /data/secret
+      volumes:
+      - name: configmap
+        configMap:
+          name: capi-bootstrap
+      - name: secret
+        configMap:
+          name: capi-bootstrap
+      restartPolicy: Never
+  backoffLimit: 4

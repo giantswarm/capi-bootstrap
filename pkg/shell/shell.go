@@ -11,13 +11,11 @@ import (
 
 // VerifyBinaryExists verifies that <name> binary exists in the current $PATH
 func VerifyBinaryExists(name string) error {
-	stdOut, stdErr, err := Execute(Command{
+	stdOut, _, err := Execute(Command{
 		Name: "which",
 		Args: []string{name},
 	})
-	if err != nil {
-		return fmt.Errorf("%q: %s", err, stdErr)
-	} else if stdOut == "" {
+	if err != nil || stdOut == "" {
 		return errors.New("not found")
 	}
 	return nil
@@ -27,7 +25,7 @@ type Command struct {
 	Name string
 	Args []string
 	Env  map[string]string
-	Tee  bool
+	Tee  bool // set this to true to see the output of the command on stdout, useful for debugging
 }
 
 func Execute(command Command) (string, string, error) {

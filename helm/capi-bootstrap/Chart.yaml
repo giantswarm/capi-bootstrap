@@ -1,0 +1,10 @@
+apiVersion: v2
+annotations:
+  application.giantswarm.io/team: "rocket"
+  config.giantswarm.io/version: 1.x.x
+description: A Helm chart for capi-bootstrap
+home: https://github.com/giantswarm/capi-bootstrap
+name: capi-bootstrap
+sources:
+- https://github.com/giantswarm/capi-bootstrap
+version: 0.1.0
