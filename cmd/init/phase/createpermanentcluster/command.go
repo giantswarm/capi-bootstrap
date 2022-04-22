@@ -5,6 +5,8 @@ import (
 
 	"github.com/giantswarm/microerror"
 	"github.com/spf13/cobra"
+
+	config2 "github.com/giantswarm/capi-bootstrap/pkg/config"
 )
 
 const (
@@ -23,7 +25,7 @@ func New(config Config) (*cobra.Command, *Runner, error) {
 		config.Stdout = os.Stdout
 	}
 
-	var flags flags
+	var flags config2.Flag
 
 	runner := Runner{
 		flag:   &flags,

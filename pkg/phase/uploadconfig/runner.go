@@ -2,6 +2,7 @@ package uploadconfig
 
 import (
 	"context"
+	"os"
 
 	"github.com/giantswarm/microerror"
 	"github.com/spf13/cobra"
@@ -11,7 +12,6 @@ import (
 	"sigs.k8s.io/yaml"
 
 	config2 "github.com/giantswarm/capi-bootstrap/pkg/config"
-	"github.com/giantswarm/capi-bootstrap/pkg/kubernetes"
 )
 
 func (r *Runner) Run(cmd *cobra.Command, _ []string) error {
@@ -20,25 +20,29 @@ func (r *Runner) Run(cmd *cobra.Command, _ []string) error {
 		return microerror.Mask(err)
 	}
 
-	bootstrapConfig, err := r.flag.ToConfig()
+	environment, err := r.flag.BuildEnvironment(r.logger)
 	if err != nil {
 		return microerror.Mask(err)
 	}
 
-	err = r.Do(cmd.Context(), bootstrapConfig)
+	err = r.Do(cmd.Context(), environment)
 	return microerror.Mask(err)
 }
 
-func (r *Runner) Do(ctx context.Context, bootstrapConfig config2.BootstrapConfig) error {
-	k8sClient, err := kubernetes.ClientFromFlags(bootstrapConfig.Spec.BootstrapCluster.Kubeconfig, false)
+func (r *Runner) Do(ctx context.Context, environment *config2.Environment) error {
+	k8sClient, err := environment.GetK8sClient()
 	if err != nil {
 		return microerror.Mask(err)
 	}
-	k8sClient.Logger = r.logger
+
+	lastpassClient, err := environment.GetLastpassClient()
+	if err != nil {
+		return microerror.Mask(err)
+	}
 
 	r.logger.Debugf(ctx, "uploading config")
 
-	content, err := yaml.Marshal(bootstrapConfig)
+	content, err := yaml.Marshal(environment.ConfigFile)
 	if err != nil {
 		return microerror.Mask(err)
 	}
@@ -48,7 +52,30 @@ func (r *Runner) Do(ctx context.Context, bootstrapConfig config2.BootstrapConfig
 		return microerror.Mask(err)
 	}
 
-	apps := []client.Object{
+	secrets := map[string]string{}
+	for _, secret := range environment.ConfigFile.Spec.Secrets {
+		var value string
+		if secret.EnvVar != nil {
+			var ok bool
+			value, ok = os.LookupEnv(secret.EnvVar.Name)
+			if !ok {
+				return microerror.Maskf(notFoundError, "environment variable %s not defined for secret %s", secret.EnvVar.Name, secret.Key)
+			}
+		} else if secret.Lastpass != nil {
+			account, err := lastpassClient.Account(ctx, secret.Lastpass.Share, secret.Lastpass.Group, secret.Lastpass.Name)
+			if err != nil {
+				return microerror.Mask(err)
+			}
+
+			value = account.Notes
+		} else {
+			return microerror.Maskf(invalidConfigError, "secret definition with key %s is invalid", secret.Key)
+		}
+
+		secrets[secret.Key] = value
+	}
+
+	resources := []client.Object{
 		&core.ConfigMap{
 			ObjectMeta: meta.ObjectMeta{
 				Name:      "capi-bootstrap",
@@ -58,9 +85,16 @@ func (r *Runner) Do(ctx context.Context, bootstrapConfig config2.BootstrapConfig
 				"config": string(content),
 			},
 		},
+		&core.Secret{
+			ObjectMeta: meta.ObjectMeta{
+				Name:      "capi-bootstrap",
+				Namespace: "giantswarm",
+			},
+			StringData: secrets,
+		},
 	}
 
-	err = k8sClient.ApplyResources(ctx, apps)
+	err = k8sClient.ApplyResources(ctx, resources)
 	if err != nil {
 		return microerror.Mask(err)
 	}

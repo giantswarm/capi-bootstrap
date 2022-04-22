@@ -8,7 +8,6 @@ import (
 	"github.com/spf13/cobra"
 
 	config2 "github.com/giantswarm/capi-bootstrap/pkg/config"
-	"github.com/giantswarm/capi-bootstrap/pkg/kind"
 )
 
 func (r *Runner) Run(cmd *cobra.Command, _ []string) error {
@@ -17,18 +16,19 @@ func (r *Runner) Run(cmd *cobra.Command, _ []string) error {
 		return microerror.Mask(err)
 	}
 
-	bootstrapConfig, err := r.flag.ToConfig()
+	environment, err := r.flag.BuildEnvironment(r.logger)
 	if err != nil {
 		return microerror.Mask(err)
 	}
 
-	err = r.Do(cmd.Context(), bootstrapConfig)
+	err = r.Do(cmd.Context(), environment)
 	return microerror.Mask(err)
 }
 
-func (r *Runner) Do(ctx context.Context, bootstrapConfig config2.BootstrapConfig) error {
-	kindClient := kind.Client{
-		ClusterName: bootstrapConfig.Spec.BootstrapCluster.Name,
+func (r *Runner) Do(ctx context.Context, environment *config2.Environment) error {
+	kindClient, err := environment.GetKindClient()
+	if err != nil {
+		return microerror.Mask(err)
 	}
 
 	r.logger.Debugf(ctx, "creating bootstrap cluster")
@@ -44,18 +44,18 @@ func (r *Runner) Do(ctx context.Context, bootstrapConfig config2.BootstrapConfig
 			return microerror.Mask(err)
 		}
 
-		err = os.WriteFile(bootstrapConfig.Spec.BootstrapCluster.Kubeconfig, kubeconfigData, 0644)
+		err = os.WriteFile(environment.ConfigFile.Spec.BootstrapCluster.Kubeconfig, kubeconfigData, 0644)
 		if err != nil {
 			return microerror.Mask(err)
 		}
 	} else {
-		kubeconfigData, err = kindClient.CreateCluster(bootstrapConfig.Spec.BootstrapCluster.Kubeconfig)
+		kubeconfigData, err = kindClient.CreateCluster(environment.ConfigFile.Spec.BootstrapCluster.Kubeconfig)
 		if err != nil {
 			return microerror.Mask(err)
 		}
 	}
 
-	r.logger.Debugf(ctx, "wrote bootstrap cluster kubeconfig to %s", bootstrapConfig.Spec.BootstrapCluster.Kubeconfig)
+	r.logger.Debugf(ctx, "wrote bootstrap cluster kubeconfig to %s", environment.ConfigFile.Spec.BootstrapCluster.Kubeconfig)
 	r.logger.Debugf(ctx, "created bootstrap cluster")
 
 	return nil

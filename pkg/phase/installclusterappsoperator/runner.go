@@ -11,7 +11,7 @@ import (
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/giantswarm/capi-bootstrap/pkg/kubernetes"
+	"github.com/giantswarm/capi-bootstrap/pkg/config"
 )
 
 func (r *Runner) Run(cmd *cobra.Command, args []string) error {
@@ -20,16 +20,20 @@ func (r *Runner) Run(cmd *cobra.Command, args []string) error {
 		return microerror.Mask(err)
 	}
 
-	err = r.Do(cmd.Context())
-	return microerror.Mask(err)
-}
-
-func (r *Runner) Do(ctx context.Context) error {
-	k8sClient, err := kubernetes.ClientFromFlags(r.flag.Kubeconfig, r.flag.InCluster)
+	environment, err := r.flag.BuildEnvironment(r.logger)
 	if err != nil {
 		return microerror.Mask(err)
 	}
-	k8sClient.Logger = r.logger
+
+	err = r.Do(cmd.Context(), environment)
+	return microerror.Mask(err)
+}
+
+func (r *Runner) Do(ctx context.Context, environment *config.Environment) error {
+	k8sClient, err := environment.GetK8sClient()
+	if err != nil {
+		return microerror.Mask(err)
+	}
 
 	{
 		r.logger.Debugf(ctx, "installing cluster-apps-operator")
@@ -44,7 +48,7 @@ func (r *Runner) Do(ctx context.Context) error {
 					"values": fmt.Sprintf(`baseDomain: %s
 provider:
   kind: %s
-`, r.flag.BaseDomain, r.flag.Provider),
+`, environment.ConfigFile.Spec.BaseDomain, environment.ConfigFile.Spec.Provider),
 				},
 			},
 			&application.App{

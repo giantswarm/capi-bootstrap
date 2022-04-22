@@ -34,7 +34,7 @@ func (r *Runner) Do(ctx context.Context, _ *cobra.Command, _ []string) error {
 		return microerror.Mask(err)
 	}
 
-	var bootstrapConfig config.BootstrapConfig
+	var bootstrapConfig config.ConfigFile
 	err = yaml.Unmarshal(content, &bootstrapConfig)
 	if err != nil {
 		return microerror.Mask(err)

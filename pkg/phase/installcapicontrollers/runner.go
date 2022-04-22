@@ -8,7 +8,7 @@ import (
 	"github.com/spf13/cobra"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/giantswarm/capi-bootstrap/pkg/kubernetes"
+	"github.com/giantswarm/capi-bootstrap/pkg/config"
 	"github.com/giantswarm/capi-bootstrap/pkg/shell"
 )
 
@@ -18,16 +18,25 @@ func (r *Runner) Run(cmd *cobra.Command, _ []string) error {
 		return microerror.Mask(err)
 	}
 
-	err = r.Do(cmd.Context())
-	return microerror.Mask(err)
-}
-
-func (r *Runner) Do(ctx context.Context) error {
-	k8sClient, err := kubernetes.ClientFromFlags(r.flag.Kubeconfig, r.flag.InCluster)
+	environment, err := r.flag.BuildEnvironment(r.logger)
 	if err != nil {
 		return microerror.Mask(err)
 	}
-	k8sClient.Logger = r.logger
+
+	err = r.Do(cmd.Context(), environment)
+	return microerror.Mask(err)
+}
+
+func (r *Runner) Do(ctx context.Context, environment *config.Environment) error {
+	k8sClient, err := environment.GetK8sClient()
+	if err != nil {
+		return microerror.Mask(err)
+	}
+
+	kubeconfig, err := environment.GetKubeconfig()
+	if err != nil {
+		return microerror.Mask(err)
+	}
 
 	r.logger.Debugf(ctx, "installing capi controllers")
 
@@ -37,9 +46,9 @@ func (r *Runner) Do(ctx context.Context) error {
 			Args: []string{
 				"init",
 				"--kubeconfig",
-				r.flag.Kubeconfig,
+				kubeconfig,
 				"--infrastructure",
-				r.flag.Provider,
+				environment.ConfigFile.Spec.Provider,
 			},
 		})
 		if err != nil {

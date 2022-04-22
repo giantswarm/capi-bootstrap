@@ -4,6 +4,8 @@ import (
 	"io"
 
 	"github.com/giantswarm/micrologger"
+
+	config2 "github.com/giantswarm/capi-bootstrap/pkg/config"
 )
 
 type Config struct {
@@ -14,7 +16,7 @@ type Config struct {
 }
 
 type Runner struct {
-	flag *flags
+	flag *config2.Flag
 
 	logger micrologger.Logger
 

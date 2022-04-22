@@ -8,7 +8,6 @@ import (
 
 	"github.com/giantswarm/capi-bootstrap/cmd/init/phase/createpermanentcluster"
 	"github.com/giantswarm/capi-bootstrap/cmd/init/phase/preflight"
-	"github.com/giantswarm/capi-bootstrap/pkg/config"
 	"github.com/giantswarm/capi-bootstrap/pkg/phase/installappplatform"
 	"github.com/giantswarm/capi-bootstrap/pkg/phase/installcapicontrollers"
 	"github.com/giantswarm/capi-bootstrap/pkg/phase/installcertmanager"
@@ -32,7 +31,7 @@ func (r *Runner) Run(cmd *cobra.Command, _ []string) error {
 }
 
 func (r *Runner) Do(ctx context.Context) error {
-	bootstrapConfig, err := config.FromFile(r.flag.ConfigFile)
+	environment, err := r.flag.BuildEnvironment(r.logger)
 	if err != nil {
 		return microerror.Mask(err)
 	}
@@ -56,7 +55,7 @@ func (r *Runner) Do(ctx context.Context) error {
 			Stderr: r.stderr,
 			Stdout: r.stdout,
 		})
-		err = runner.Do(ctx, "bootstrap", true, bootstrapConfig)
+		err = runner.Do(ctx, environment)
 		if err != nil {
 			return microerror.Mask(err)
 		}
@@ -69,7 +68,7 @@ func (r *Runner) Do(ctx context.Context) error {
 			Stderr: r.stderr,
 			Stdout: r.stdout,
 		})
-		err = runner.Do(ctx)
+		err = runner.Do(ctx, environment)
 		if err != nil {
 			return microerror.Mask(err)
 		}
@@ -82,7 +81,7 @@ func (r *Runner) Do(ctx context.Context) error {
 			Stderr: r.stderr,
 			Stdout: r.stdout,
 		})
-		err = runner.Do(ctx)
+		err = runner.Do(ctx, environment)
 		if err != nil {
 			return microerror.Mask(err)
 		}
@@ -95,7 +94,7 @@ func (r *Runner) Do(ctx context.Context) error {
 			Stderr: r.stderr,
 			Stdout: r.stdout,
 		})
-		err = runner.Do(ctx)
+		err = runner.Do(ctx, environment)
 		if err != nil {
 			return microerror.Mask(err)
 		}
@@ -108,7 +107,7 @@ func (r *Runner) Do(ctx context.Context) error {
 			Stderr: r.stderr,
 			Stdout: r.stdout,
 		})
-		err = runner.Do(ctx)
+		err = runner.Do(ctx, environment)
 		if err != nil {
 			return microerror.Mask(err)
 		}
@@ -121,7 +120,7 @@ func (r *Runner) Do(ctx context.Context) error {
 			Stderr: r.stderr,
 			Stdout: r.stdout,
 		})
-		err = runner.Do(ctx, bootstrapConfig)
+		err = runner.Do(ctx, environment)
 		if err != nil {
 			return microerror.Mask(err)
 		}
@@ -134,7 +133,7 @@ func (r *Runner) Do(ctx context.Context) error {
 			Stderr: r.stderr,
 			Stdout: r.stdout,
 		})
-		err = runner.Do(ctx, bootstrapConfig)
+		err = runner.Do(ctx, environment)
 		if err != nil {
 			return microerror.Mask(err)
 		}

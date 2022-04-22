@@ -2,22 +2,25 @@ package deletepermanentcluster
 
 import (
 	"context"
-	"io"
-	"strings"
 
 	"github.com/giantswarm/microerror"
 	"github.com/spf13/cobra"
 
-	"github.com/giantswarm/capi-bootstrap/pkg/kubernetes"
+	"github.com/giantswarm/capi-bootstrap/pkg/config"
 )
 
-func (r *Runner) Run(cmd *cobra.Command, args []string) error {
+func (r *Runner) Run(cmd *cobra.Command, _ []string) error {
 	err := r.flag.Validate()
 	if err != nil {
 		return microerror.Mask(err)
 	}
 
-	err = r.Do(cmd.Context(), cmd, args)
+	environment, err := r.flag.BuildEnvironment(r.logger)
+	if err != nil {
+		return microerror.Mask(err)
+	}
+
+	err = r.Do(cmd.Context(), environment)
 	if err != nil {
 		return microerror.Mask(err)
 	}
@@ -25,26 +28,20 @@ func (r *Runner) Run(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func (r *Runner) Do(ctx context.Context, _ *cobra.Command, _ []string) error {
-	k8sClient, err := kubernetes.ClientFromFlags(r.flag.Kubeconfig, r.flag.InCluster)
+func (r *Runner) Do(ctx context.Context, environment *config.Environment) error {
+	k8sClient, err := environment.GetK8sClient()
 	if err != nil {
 		return microerror.Mask(err)
 	}
-	k8sClient.Logger = r.logger
 
 	r.logger.Debugf(ctx, "deleting permanent cluster")
 
-	clusterResources, err := kubernetes.DecodeObjects(io.NopCloser(strings.NewReader(r.flag.FileInputs)))
+	err = k8sClient.DeleteResources(ctx, environment.ConfigFile.Spec.FileInputs)
 	if err != nil {
 		return microerror.Mask(err)
 	}
 
-	err = k8sClient.DeleteResources(ctx, clusterResources)
-	if err != nil {
-		return microerror.Mask(err)
-	}
-
-	err = k8sClient.WaitForClusterDeleted(ctx, r.flag.ClusterNamespace, r.flag.ManagementClusterName)
+	err = k8sClient.WaitForClusterDeleted(ctx, environment.ConfigFile.Spec.ClusterNamespace, environment.ConfigFile.Spec.PermanentCluster.Name)
 	if err != nil {
 		return microerror.Mask(err)
 	}

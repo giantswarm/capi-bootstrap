@@ -3,7 +3,6 @@ package installappplatform
 import (
 	"context"
 	"fmt"
-	"os"
 	"path"
 	"path/filepath"
 
@@ -11,17 +10,12 @@ import (
 	"github.com/giantswarm/microerror"
 	"github.com/google/go-github/v43/github"
 	"github.com/spf13/cobra"
-	"golang.org/x/oauth2"
 	core "k8s.io/api/core/v1"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/tools/clientcmd"
-	"k8s.io/client-go/tools/clientcmd/api"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/giantswarm/capi-bootstrap/pkg/config"
-	"github.com/giantswarm/capi-bootstrap/pkg/helm"
 	"github.com/giantswarm/capi-bootstrap/pkg/kubernetes"
-	"github.com/giantswarm/capi-bootstrap/pkg/opsctl"
 )
 
 func (r *Runner) Run(cmd *cobra.Command, _ []string) error {
@@ -30,84 +24,32 @@ func (r *Runner) Run(cmd *cobra.Command, _ []string) error {
 		return microerror.Mask(err)
 	}
 
-	bootstrapConfig, err := config.FromFile(r.flag.ConfigFile)
+	environment, err := r.flag.BuildEnvironment(r.logger)
 	if err != nil {
 		return microerror.Mask(err)
 	}
 
-	err = r.Do(cmd.Context(), r.flag.Target, r.flag.InCluster, bootstrapConfig)
+	err = r.Do(cmd.Context(), environment)
 	return microerror.Mask(err)
 }
 
-func generateInClusterKubeconfig(path string) error {
-	kubeconfig := api.Config{
-		Kind:       "Config",
-		APIVersion: "v1",
-		Clusters: map[string]*api.Cluster{
-			"default": {
-				Server:               "https://kubernetes.default.svc",
-				CertificateAuthority: "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt",
-			},
-		},
-		AuthInfos: map[string]*api.AuthInfo{
-			"default": {
-				TokenFile: "/var/run/secrets/kubernetes.io/serviceaccount/token",
-			},
-		},
-		Contexts: map[string]*api.Context{
-			"default": {
-				Cluster:   "default",
-				AuthInfo:  "default",
-				Namespace: "default",
-			},
-		},
-		CurrentContext: "default",
-	}
-
-	err := clientcmd.WriteToFile(kubeconfig, path)
-	return microerror.Mask(err)
-}
-
-func (r *Runner) Do(ctx context.Context, target string, inCluster bool, bootstrapConfig config.BootstrapConfig) error {
-	var kubeconfig string
-	if !inCluster {
-		if target == "bootstrap" {
-			kubeconfig = bootstrapConfig.Spec.BootstrapCluster.Kubeconfig
-		} else if target == "permanent" {
-			kubeconfig = bootstrapConfig.Spec.PermanentCluster.Kubeconfig
-		}
-	} else {
-		kubeconfig = "in-cluster.kubeconfig"
-		err := generateInClusterKubeconfig(kubeconfig)
-		if err != nil {
-			return microerror.Mask(err)
-		}
-	}
-
-	k8sClient, err := kubernetes.ClientFromFlags(kubeconfig, inCluster)
+func (r *Runner) Do(ctx context.Context, environment *config.Environment) error {
+	helmClient, err := environment.GetHelmClient()
 	if err != nil {
 		return microerror.Mask(err)
 	}
-	k8sClient.Logger = r.logger
 
-	var gitHubClient *github.Client
-	{
-		token := oauth2.Token{AccessToken: os.Getenv("GITHUB_TOKEN")}
-		tokenSource := oauth2.StaticTokenSource(&token)
-		httpClient := oauth2.NewClient(ctx, tokenSource)
-		gitHubClient = github.NewClient(httpClient)
+	opsctlClient, err := environment.GetOpsctlClient()
+	if err != nil {
+		return microerror.Mask(err)
 	}
 
-	helmClient := helm.Client{
-		KubeconfigPath: kubeconfig,
+	k8sClient, err := environment.GetK8sClient()
+	if err != nil {
+		return microerror.Mask(err)
 	}
 
-	opsctlClient, err := opsctl.New(opsctl.Config{
-		ManagementClusterName: bootstrapConfig.Spec.PermanentCluster.Name,
-		GitHubToken:           os.Getenv("GITHUB_TOKEN"),
-		InstallationsBranch:   bootstrapConfig.Spec.Config.Installations.BranchName,
-		Kubeconfig:            kubeconfig,
-	})
+	gitHubClient, err := environment.GetGitHubClient(ctx)
 	if err != nil {
 		return microerror.Mask(err)
 	}
@@ -191,7 +133,7 @@ func (r *Runner) Do(ctx context.Context, target string, inCluster bool, bootstra
 	{
 		r.logger.Debugf(ctx, "installing app-operator")
 
-		err := helmClient.InstallChart("app-operator", "control-plane-catalog", "giantswarm", fmt.Sprintf("provider.kind=%s", bootstrapConfig.Spec.Provider))
+		err := helmClient.InstallChart("app-operator", "control-plane-catalog", "giantswarm", fmt.Sprintf("provider.kind=%s", environment.ConfigFile.Spec.Provider))
 		if err != nil {
 			return microerror.Mask(err)
 		}
@@ -222,7 +164,7 @@ func (r *Runner) Do(ctx context.Context, target string, inCluster bool, bootstra
 				Data: map[string]string{
 					"values": fmt.Sprintf(`provider:
   kind: %s
-`, bootstrapConfig.Spec.Provider),
+`, environment.ConfigFile.Spec.Provider),
 				},
 			},
 			&core.ConfigMap{

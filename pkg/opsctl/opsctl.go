@@ -10,8 +10,8 @@ import (
 	"github.com/giantswarm/capi-bootstrap/pkg/util"
 )
 
-func New(config Config) (Client, error) {
-	return Client{
+func New(config Config) (*Client, error) {
+	return &Client{
 		kubeconfig:            config.Kubeconfig,
 		managementClusterName: config.ManagementClusterName,
 		gitHubToken:           config.GitHubToken,

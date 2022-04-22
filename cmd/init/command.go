@@ -7,6 +7,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/giantswarm/capi-bootstrap/cmd/init/phase"
+	config2 "github.com/giantswarm/capi-bootstrap/pkg/config"
 )
 
 const (
@@ -38,7 +39,7 @@ func New(config Config) (*cobra.Command, *Runner, error) {
 		}
 	}
 
-	var flag flags
+	var flag config2.Flag
 
 	runner := Runner{
 		flag: &flag,

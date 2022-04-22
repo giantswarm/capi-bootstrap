@@ -19,3 +19,12 @@ var invalidFlagError = &microerror.Error{
 func IsInvalidFlag(err error) bool {
 	return microerror.Cause(err) == invalidFlagError
 }
+
+var notFoundError = &microerror.Error{
+	Kind: "notFoundError",
+}
+
+// IsNotFound asserts notFoundError.
+func IsNotFound(err error) bool {
+	return microerror.Cause(err) == notFoundError
+}

@@ -3,53 +3,57 @@ package pivot
 import (
 	"context"
 	"fmt"
-	"io"
-	"strings"
 
 	"github.com/giantswarm/microerror"
 	"github.com/spf13/cobra"
 
-	"github.com/giantswarm/capi-bootstrap/pkg/kubernetes"
+	"github.com/giantswarm/capi-bootstrap/pkg/config"
 	"github.com/giantswarm/capi-bootstrap/pkg/shell"
 )
 
-func (r *Runner) Run(cmd *cobra.Command, args []string) error {
+func (r *Runner) Run(cmd *cobra.Command, _ []string) error {
 	err := r.flag.Validate()
 	if err != nil {
 		return microerror.Mask(err)
 	}
 
-	err = r.Do(cmd.Context(), cmd, args)
+	environment, err := r.flag.BuildEnvironment(r.logger)
 	if err != nil {
 		return microerror.Mask(err)
 	}
 
-	return nil
+	err = r.Do(cmd.Context(), environment)
+	return microerror.Mask(err)
 }
 
-func (r *Runner) Do(ctx context.Context, _ *cobra.Command, _ []string) error {
+func (r *Runner) Do(ctx context.Context, environment *config.Environment) error {
 	r.logger.Debugf(ctx, "pivoting management cluster")
 
 	var source ClusterScope
 	{
-		source.KubeconfigPath = r.flag.FromKubeconfig
 		var err error
-		source.K8sClient, err = kubernetes.ClientFromFlags(r.flag.FromKubeconfig, r.flag.FromInCluster)
+		source.KubeconfigPath, err = environment.GetKubeconfig()
 		if err != nil {
 			return microerror.Mask(err)
 		}
-		source.K8sClient.Logger = r.logger
+		source.K8sClient, err = environment.GetK8sClient()
+		if err != nil {
+			return microerror.Mask(err)
+		}
 	}
 
 	var target ClusterScope
 	{
-		target.KubeconfigPath = r.flag.FromKubeconfig
+		// TODO: fix this
 		var err error
-		target.K8sClient, err = kubernetes.ClientFromFlags(r.flag.ToKubeconfig, r.flag.ToInCluster)
+		source.KubeconfigPath, err = environment.GetKubeconfig()
 		if err != nil {
 			return microerror.Mask(err)
 		}
-		target.K8sClient.Logger = r.logger
+		source.K8sClient, err = environment.GetK8sClient()
+		if err != nil {
+			return microerror.Mask(err)
+		}
 	}
 
 	_, stdErr, err := shell.Execute(shell.Command{
@@ -57,7 +61,7 @@ func (r *Runner) Do(ctx context.Context, _ *cobra.Command, _ []string) error {
 		Args: []string{
 			"move",
 			"--namespace",
-			r.flag.ClusterNamespace,
+			environment.ConfigFile.Spec.ClusterNamespace,
 			"--kubeconfig",
 			source.KubeconfigPath,
 			"--to-kubeconfig",
@@ -68,22 +72,17 @@ func (r *Runner) Do(ctx context.Context, _ *cobra.Command, _ []string) error {
 		return microerror.Mask(fmt.Errorf("%w: %s", err, stdErr))
 	}
 
-	clusterResources, err := kubernetes.DecodeObjects(io.NopCloser(strings.NewReader(r.flag.FileInputs)))
+	err = target.K8sClient.ApplyResources(ctx, environment.ConfigFile.Spec.FileInputs)
 	if err != nil {
 		return microerror.Mask(err)
 	}
 
-	err = target.K8sClient.ApplyResources(ctx, clusterResources)
+	err = target.K8sClient.WaitForClusterReady(ctx, environment.ConfigFile.Spec.ClusterNamespace, environment.ConfigFile.Spec.PermanentCluster.Name)
 	if err != nil {
 		return microerror.Mask(err)
 	}
 
-	err = target.K8sClient.WaitForClusterReady(ctx, r.flag.ClusterNamespace, r.flag.ManagementClusterName)
-	if err != nil {
-		return microerror.Mask(err)
-	}
-
-	err = source.K8sClient.DeleteResources(ctx, clusterResources)
+	err = source.K8sClient.DeleteResources(ctx, environment.ConfigFile.Spec.FileInputs)
 	if err != nil {
 		return microerror.Mask(err)
 	}

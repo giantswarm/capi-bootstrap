@@ -7,7 +7,6 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/giantswarm/capi-bootstrap/cmd/init/phase/preflight"
-	"github.com/giantswarm/capi-bootstrap/pkg/config"
 	"github.com/giantswarm/capi-bootstrap/pkg/phase/createbootstrapcluster"
 	"github.com/giantswarm/capi-bootstrap/pkg/phase/launch"
 	"github.com/giantswarm/capi-bootstrap/pkg/phase/uploadconfig"
@@ -28,7 +27,7 @@ func (r *Runner) Run(cmd *cobra.Command, args []string) error {
 }
 
 func (r *Runner) Do(ctx context.Context, _ *cobra.Command, _ []string) error {
-	bootstrapConfig, err := config.FromFile(r.flag.ConfigFile)
+	environment, err := r.flag.BuildEnvironment(r.logger)
 	if err != nil {
 		return microerror.Mask(err)
 	}
@@ -52,7 +51,7 @@ func (r *Runner) Do(ctx context.Context, _ *cobra.Command, _ []string) error {
 			Stderr: r.stderr,
 			Stdout: r.stdout,
 		})
-		err = runner.Do(ctx, bootstrapConfig)
+		err = runner.Do(ctx, environment)
 		if err != nil {
 			return microerror.Mask(err)
 		}
@@ -65,7 +64,7 @@ func (r *Runner) Do(ctx context.Context, _ *cobra.Command, _ []string) error {
 			Stderr: r.stderr,
 			Stdout: r.stdout,
 		})
-		err = runner.Do(ctx, bootstrapConfig)
+		err = runner.Do(ctx, environment)
 		if err != nil {
 			return microerror.Mask(err)
 		}
@@ -78,7 +77,7 @@ func (r *Runner) Do(ctx context.Context, _ *cobra.Command, _ []string) error {
 			Stderr: r.stderr,
 			Stdout: r.stdout,
 		})
-		err = runner.Do(ctx, bootstrapConfig)
+		err = runner.Do(ctx, environment)
 		if err != nil {
 			return microerror.Mask(err)
 		}
