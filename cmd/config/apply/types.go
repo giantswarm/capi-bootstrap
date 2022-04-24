@@ -7,7 +7,7 @@ import (
 )
 
 type Runner struct {
-	flags *flags
+	flag *flags
 
 	logger micrologger.Logger
 

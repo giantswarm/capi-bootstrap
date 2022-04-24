@@ -1,58 +1,34 @@
 package repo
 
 import (
+	"github.com/go-git/go-git/v5/plumbing/transport/http"
 	"github.com/google/go-github/v43/github"
 )
 
 type Config struct {
+	GitAuth      *http.BasicAuth
 	GitHubClient *github.Client
 
-	AccountEngineer       string
-	BaseDomain            string
-	Customer              string
-	ManagementClusterName string
-	Pipeline              string
-	Provider              string
+	Owner string
+	Repo  string
 }
 
-type Service struct {
+type Client struct {
+	gitAuth      *http.BasicAuth
 	gitHubClient *github.Client
 
-	accountEngineer       string
-	baseDomain            string
-	customer              string
-	managementClusterName string
-	pipeline              string
-	provider              string
+	owner string
+	repo  string
+
+	defaultBranch *github.Reference
 }
 
-type ClusterDefinition struct {
-	Base            string `json:"base"`
-	Codename        string `json:"codename"`
-	Customer        string `json:"customer"`
-	AccountEngineer string `json:"accountEngineer"`
-	Pipeline        string `json:"pipeline"`
-	Provider        string `json:"provider"`
+type Change struct {
+	Path      string
+	Operation string
+	Content   string
 }
 
-type AppCatalogValues struct {
-	AppCatalog AppCatalog `json:"appCatalog"`
-}
-
-type AppCatalog struct {
-	Config AppCatalogConfig `json:"config"`
-}
-
-type AppCatalogConfig struct {
-	ConfigMap AppCatalogConfigConfigMap `json:"configMap"`
-}
-
-type AppCatalogConfigConfigMap struct {
-	Values AppCatalogConfigConfigMapValues `json:"values"`
-}
-
-type AppCatalogConfigConfigMapValues struct {
-	BaseDomain        string `json:"baseDomain"`
-	ManagementCluster string `json:"managementCluster"`
-	Provider          string `json:"provider"`
+type Commit struct {
+	changes []Change
 }

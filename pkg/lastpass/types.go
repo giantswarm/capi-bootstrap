@@ -1,6 +1,11 @@
 package lastpass
 
-import "github.com/ansd/lastpass-go"
+import (
+	"context"
+
+	"github.com/ansd/lastpass-go"
+	"github.com/giantswarm/microerror"
+)
 
 type Config struct {
 	Username   string
@@ -14,4 +19,13 @@ type Client struct {
 	username   string
 	password   string
 	totpSecret string
+}
+
+func (c *Client) DeleteAccount(ctx context.Context, id string) error {
+	if err := c.authenticate(ctx); err != nil {
+		return microerror.Mask(err)
+	}
+
+	err := c.client.Delete(ctx, &lastpass.Account{ID: id})
+	return microerror.Mask(err)
 }

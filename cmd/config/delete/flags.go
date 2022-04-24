@@ -7,20 +7,20 @@ import (
 )
 
 const (
-	flagManagementClusterName = "name"
+	flagClusterName = "cluster-name"
 )
 
 type flags struct {
-	ManagementClusterName string
+	ClusterName string
 }
 
 func (f *flags) Init(cmd *cobra.Command) {
-	cmd.Flags().StringVarP(&f.ManagementClusterName, flagManagementClusterName, "n", "", `Management cluster name`)
+	cmd.Flags().StringVarP(&f.ClusterName, flagClusterName, "n", "", `Management cluster name`)
 }
 
 func (f *flags) Validate() error {
-	if f.ManagementClusterName == "" {
-		return microerror.Maskf(invalidFlagError, "--%s must not be empty", flagManagementClusterName)
+	if f.ClusterName == "" {
+		return microerror.Maskf(invalidFlagError, "--%s must not be empty", flagClusterName)
 	}
 
 	return nil

@@ -43,7 +43,26 @@ func (c *Client) authenticate(ctx context.Context) error {
 	return nil
 }
 
-func (c *Client) Account(ctx context.Context, share, group, name string) (*lastpass.Account, error) {
+func (c *Client) CreateAccount(ctx context.Context, share, group, name, notes string) (*lastpass.Account, error) {
+	if err := c.authenticate(ctx); err != nil {
+		return nil, microerror.Mask(err)
+	}
+
+	toCreate := lastpass.Account{
+		Name:  name,
+		Group: group,
+		Share: share,
+		Notes: notes,
+	}
+	err := c.client.Add(ctx, &toCreate)
+	if err != nil {
+		return nil, microerror.Mask(err)
+	}
+
+	return &toCreate, nil
+}
+
+func (c *Client) GetAccount(ctx context.Context, share, group, name string) (*lastpass.Account, error) {
 	if err := c.authenticate(ctx); err != nil {
 		return nil, microerror.Mask(err)
 	}
@@ -59,5 +78,5 @@ func (c *Client) Account(ctx context.Context, share, group, name string) (*lastp
 		}
 	}
 
-	return nil, microerror.Maskf(notFoundError, "account %s/%s not found", group, name)
+	return nil, microerror.Maskf(notFoundError, "account %s/%s/%s not found", share, group, name)
 }

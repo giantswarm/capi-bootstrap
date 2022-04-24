@@ -6,9 +6,8 @@ import (
 	"github.com/giantswarm/microerror"
 	"github.com/spf13/cobra"
 
-	"github.com/giantswarm/capi-bootstrap/cmd/config/apply"
+	applycmd "github.com/giantswarm/capi-bootstrap/cmd/config/apply"
 	deletecmd "github.com/giantswarm/capi-bootstrap/cmd/config/delete"
-	"github.com/giantswarm/capi-bootstrap/cmd/config/print"
 )
 
 const (
@@ -30,7 +29,7 @@ func New(config Config) (*cobra.Command, error) {
 	var applyCmd *cobra.Command
 	{
 		var err error
-		applyCmd, err = apply.New(apply.Config{
+		applyCmd, err = applycmd.New(applycmd.Config{
 			Logger: config.Logger,
 			Stderr: config.Stderr,
 			Stdout: config.Stdout,
@@ -53,35 +52,21 @@ func New(config Config) (*cobra.Command, error) {
 		}
 	}
 
-	var printCmd *cobra.Command
-	{
-		var err error
-		printCmd, err = print.New(print.Config{
-			Logger: config.Logger,
-			Stderr: config.Stderr,
-			Stdout: config.Stdout,
-		})
-		if err != nil {
-			return nil, microerror.Mask(err)
-		}
-	}
-
-	r := &Runner{
+	runner := Runner{
 		logger: config.Logger,
 		stderr: config.Stderr,
 		stdout: config.Stdout,
 	}
 
-	c := &cobra.Command{
+	command := cobra.Command{
 		Use:   name,
 		Short: description,
 		Long:  description,
-		RunE:  r.Run,
+		RunE:  runner.Run,
 	}
 
-	c.AddCommand(applyCmd)
-	c.AddCommand(deleteCmd)
-	c.AddCommand(printCmd)
+	command.AddCommand(applyCmd)
+	command.AddCommand(deleteCmd)
 
-	return c, nil
+	return &command, nil
 }

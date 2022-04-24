@@ -23,23 +23,21 @@ func New(config Config) (*cobra.Command, error) {
 		config.Stdout = os.Stdout
 	}
 
-	flags := flags{}
-
-	r := &Runner{
-		flags:  &flags,
+	runner := Runner{
+		flag:   &flags{},
 		logger: config.Logger,
 		stderr: config.Stderr,
 		stdout: config.Stdout,
 	}
 
-	command := &cobra.Command{
+	command := cobra.Command{
 		Use:   name,
 		Short: description,
 		Long:  description,
-		RunE:  r.Run,
+		RunE:  runner.Run,
 	}
 
-	flags.Init(command)
+	runner.flag.Init(&command)
 
-	return command, nil
+	return &command, nil
 }
