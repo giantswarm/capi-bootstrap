@@ -1,4 +1,4 @@
-package apply
+package delete
 
 import (
 	"os"
@@ -9,7 +9,7 @@ import (
 
 const (
 	name        = "delete"
-	description = `Closes unmerged branches and PRs for the given cluster and creates branches and PRs to delete any config already merged to main in GitHub repos`
+	description = `Deletes a management cluster encryption key in the password manager`
 )
 
 func New(config Config) (*cobra.Command, error) {
@@ -23,23 +23,21 @@ func New(config Config) (*cobra.Command, error) {
 		config.Stdout = os.Stdout
 	}
 
-	flags := flags{}
-
-	r := &Runner{
-		flags:  &flags,
+	runner := Runner{
+		flag:   &flags{},
 		logger: config.Logger,
 		stderr: config.Stderr,
 		stdout: config.Stdout,
 	}
 
-	command := &cobra.Command{
+	command := cobra.Command{
 		Use:   name,
 		Short: description,
 		Long:  description,
-		RunE:  r.Run,
+		RunE:  runner.Run,
 	}
 
-	flags.Init(command)
+	runner.flag.Init(&command)
 
-	return command, nil
+	return &command, nil
 }

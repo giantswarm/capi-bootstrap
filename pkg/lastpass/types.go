@@ -7,12 +7,6 @@ import (
 	"github.com/giantswarm/microerror"
 )
 
-type Config struct {
-	Username   string
-	Password   string
-	TOTPSecret string
-}
-
 type Client struct {
 	client *lastpass.Client
 

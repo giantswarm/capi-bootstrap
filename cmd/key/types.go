@@ -1,4 +1,4 @@
-package apply
+package key
 
 import (
 	"io"
@@ -6,18 +6,16 @@ import (
 	"github.com/giantswarm/micrologger"
 )
 
-type Runner struct {
-	flags *flags
-
-	logger micrologger.Logger
-
-	stdout io.Writer
-	stderr io.Writer
-}
-
 type Config struct {
 	Logger micrologger.Logger
 
 	Stderr io.Writer
 	Stdout io.Writer
+}
+
+type Runner struct {
+	logger micrologger.Logger
+
+	stdout io.Writer
+	stderr io.Writer
 }

@@ -1,4 +1,4 @@
-package fleet
+package create
 
 import "github.com/giantswarm/microerror"
 
@@ -11,11 +11,11 @@ func IsInvalidConfig(err error) bool {
 	return microerror.Cause(err) == invalidConfigError
 }
 
-var notFoundError = &microerror.Error{
-	Kind: "notFoundError",
+var invalidFlagError = &microerror.Error{
+	Kind: "invalidFlagError",
 }
 
-// IsNotFound asserts notFoundError.
-func IsNotFound(err error) bool {
-	return microerror.Cause(err) == notFoundError
+// IsInvalidFlag asserts invalidFlagError.
+func IsInvalidFlag(err error) bool {
+	return microerror.Cause(err) == invalidFlagError
 }

@@ -3,9 +3,9 @@ package sops
 import "github.com/giantswarm/capi-bootstrap/pkg/lastpass"
 
 type EncryptionKey struct {
-	PrivateKey string
-	PublicKey  string
-	Type       string
+	PrivateKey string `json:"privateKey"`
+	PublicKey  string `json:"publicKey"`
+	Type       string `json:"type"`
 }
 
 type Config struct {

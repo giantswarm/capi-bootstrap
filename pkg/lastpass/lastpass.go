@@ -2,28 +2,38 @@ package lastpass
 
 import (
 	"context"
+	"os"
 
 	"github.com/ansd/lastpass-go"
 	"github.com/giantswarm/microerror"
 )
 
-func New(config Config) (*Client, error) {
-	if config.Username == "" {
-		return nil, microerror.Maskf(invalidConfigError, "%T.Username must not be empty", config)
+func mustLookupEnv(key string) (string, error) {
+	value, ok := os.LookupEnv(key)
+	if !ok {
+		return "", microerror.Maskf(invalidConfigError, "%s must be defined", key)
 	}
-	if config.Password == "" {
-		return nil, microerror.Maskf(invalidConfigError, "%T.Password must not be empty", config)
+	return value, nil
+}
+
+func New() (*Client, error) {
+	username, err := mustLookupEnv("LASTPASS_USERNAME")
+	if err != nil {
+		return nil, microerror.Mask(err)
 	}
-	if config.TOTPSecret == "" {
-		return nil, microerror.Maskf(invalidConfigError, "%T.TOTPSecret must not be empty", config)
+	password, err := mustLookupEnv("LASTPASS_PASSWORD")
+	if err != nil {
+		return nil, microerror.Mask(err)
+	}
+	totpSecret, err := mustLookupEnv("LASTPASS_TOTP_SECRET")
+	if err != nil {
+		return nil, microerror.Mask(err)
 	}
 
 	return &Client{
-		client: nil,
-
-		username:   config.Username,
-		password:   config.Password,
-		totpSecret: config.TOTPSecret,
+		username:   username,
+		password:   password,
+		totpSecret: totpSecret,
 	}, nil
 }
 

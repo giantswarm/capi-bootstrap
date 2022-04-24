@@ -1,4 +1,4 @@
-package config
+package key
 
 import (
 	"os"
@@ -6,13 +6,13 @@ import (
 	"github.com/giantswarm/microerror"
 	"github.com/spf13/cobra"
 
-	applycmd "github.com/giantswarm/capi-bootstrap/cmd/config/apply"
-	deletecmd "github.com/giantswarm/capi-bootstrap/cmd/config/delete"
+	createcmd "github.com/giantswarm/capi-bootstrap/cmd/key/create"
+	deletecmd "github.com/giantswarm/capi-bootstrap/cmd/key/delete"
 )
 
 const (
-	name        = "config"
-	description = `Commands for managing local config files and config stored in repositories`
+	name        = "key"
+	description = `Commands for managing encryption keys`
 )
 
 func New(config Config) (*cobra.Command, error) {
@@ -26,10 +26,10 @@ func New(config Config) (*cobra.Command, error) {
 		config.Stdout = os.Stdout
 	}
 
-	var applyCmd *cobra.Command
+	var createCmd *cobra.Command
 	{
 		var err error
-		applyCmd, err = applycmd.New(applycmd.Config{
+		createCmd, err = createcmd.New(createcmd.Config{
 			Logger: config.Logger,
 			Stderr: config.Stderr,
 			Stdout: config.Stdout,
@@ -65,7 +65,7 @@ func New(config Config) (*cobra.Command, error) {
 		RunE:  runner.Run,
 	}
 
-	command.AddCommand(applyCmd)
+	command.AddCommand(createCmd)
 	command.AddCommand(deleteCmd)
 
 	return &command, nil

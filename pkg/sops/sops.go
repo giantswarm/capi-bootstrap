@@ -27,21 +27,23 @@ func New(config Config) (*Client, error) {
 	}, nil
 }
 
-func (c *Client) EnsureEncryptionKey(ctx context.Context) error {
-	err := c.loadEncryptionKey(ctx)
+func (c *Client) EnsureEncryptionKey(ctx context.Context) (*EncryptionKey, error) {
+	_, err := c.loadEncryptionKey(ctx)
 	if lastpass.IsNotFound(err) {
-		return nil // already exists, don't create it
+		// fall through
 	} else if err != nil {
-		return microerror.Mask(err)
+		return nil, microerror.Mask(err)
+	} else {
+		return c.encryptionKey, nil
 	}
 
 	c.encryptionKey, err = generateEncryptionKey()
 	if err != nil {
-		return microerror.Mask(err)
+		return nil, microerror.Mask(err)
 	}
 
 	_, err = c.lastpassClient.CreateAccount(ctx, "Shared-Team Rocket", "Encryption Keys", c.clusterName, c.encryptionKey.PrivateKey)
-	return microerror.Mask(err)
+	return c.encryptionKey, microerror.Mask(err)
 }
 
 func (c *Client) DeleteEncryptionKey(ctx context.Context) error {
@@ -173,16 +175,16 @@ func (c *Client) RenderConfig() (string, error) {
 	return string(content), nil
 }
 
-func (c *Client) loadEncryptionKey(ctx context.Context) error {
+func (c *Client) loadEncryptionKey(ctx context.Context) (*EncryptionKey, error) {
 	if c.encryptionKey == nil {
 		encryptionKeyAccount, err := c.lastpassClient.GetAccount(ctx, "Shared-Team Rocket", "Encryption Keys", c.clusterName)
 		if err != nil {
-			return microerror.Mask(err)
+			return nil, microerror.Mask(err)
 		}
 
 		identity, err := age.ParseX25519Identity(encryptionKeyAccount.Notes)
 		if err != nil {
-			return microerror.Mask(err)
+			return nil, microerror.Mask(err)
 		}
 
 		c.encryptionKey = &EncryptionKey{
@@ -192,7 +194,7 @@ func (c *Client) loadEncryptionKey(ctx context.Context) error {
 		}
 	}
 
-	return nil
+	return c.encryptionKey, nil
 }
 
 func generateEncryptionKey() (*EncryptionKey, error) {

@@ -1,4 +1,4 @@
-package apply
+package create
 
 import (
 	"github.com/spf13/cobra"
@@ -15,7 +15,7 @@ type flags struct {
 }
 
 func (f *flags) Init(cmd *cobra.Command) {
-	cmd.Flags().StringVarP(&f.ClusterName, flagClusterName, "n", "", `Management cluster name`)
+	cmd.Flags().StringVar(&f.ClusterName, flagClusterName, "", `Management cluster name`)
 }
 
 func (f *flags) Validate() error {

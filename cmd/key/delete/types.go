@@ -1,4 +1,4 @@
-package apply
+package delete
 
 import (
 	"io"

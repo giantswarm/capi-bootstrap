@@ -6,7 +6,7 @@ import (
 	"github.com/giantswarm/microerror"
 	"github.com/spf13/cobra"
 
-	configcmd "github.com/giantswarm/capi-bootstrap/cmd/config"
+	keycmd "github.com/giantswarm/capi-bootstrap/cmd/key"
 	"github.com/giantswarm/capi-bootstrap/pkg/project"
 )
 
@@ -24,7 +24,7 @@ func New(config Config) (*cobra.Command, error) {
 	var configCmd *cobra.Command
 	{
 		var err error
-		configCmd, err = configcmd.New(configcmd.Config{
+		configCmd, err = keycmd.New(keycmd.Config{
 			Logger: config.Logger,
 			Stderr: config.Stderr,
 			Stdout: config.Stdout,

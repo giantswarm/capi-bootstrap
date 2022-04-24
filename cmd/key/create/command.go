@@ -1,4 +1,4 @@
-package apply
+package create
 
 import (
 	"os"
@@ -8,8 +8,8 @@ import (
 )
 
 const (
-	name        = "apply"
-	description = `Creates or updates config GitHub repositories based on the provided config file`
+	name        = "create"
+	description = `Creates a management cluster encryption key in the password manager`
 )
 
 func New(config Config) (*cobra.Command, error) {
