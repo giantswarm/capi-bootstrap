@@ -1,4 +1,4 @@
-package cmd
+package key
 
 import (
 	"os"
@@ -6,9 +6,13 @@ import (
 	"github.com/giantswarm/microerror"
 	"github.com/spf13/cobra"
 
-	keycmd "github.com/giantswarm/capi-bootstrap/cmd/key"
-	secretcmd "github.com/giantswarm/capi-bootstrap/cmd/secret"
-	"github.com/giantswarm/capi-bootstrap/pkg/project"
+	decryptcmd "github.com/giantswarm/capi-bootstrap/cmd/secret/decrypt"
+	encryptcmd "github.com/giantswarm/capi-bootstrap/cmd/secret/encrypt"
+)
+
+const (
+	name        = "secret"
+	description = `Commands for managing sops secrets`
 )
 
 func New(config Config) (*cobra.Command, error) {
@@ -22,10 +26,10 @@ func New(config Config) (*cobra.Command, error) {
 		config.Stdout = os.Stdout
 	}
 
-	var keyCmd *cobra.Command
+	var decryptCmd *cobra.Command
 	{
 		var err error
-		keyCmd, err = keycmd.New(keycmd.Config{
+		decryptCmd, err = decryptcmd.New(decryptcmd.Config{
 			Logger: config.Logger,
 			Stderr: config.Stderr,
 			Stdout: config.Stdout,
@@ -35,10 +39,10 @@ func New(config Config) (*cobra.Command, error) {
 		}
 	}
 
-	var secretCmd *cobra.Command
+	var encryptCmd *cobra.Command
 	{
 		var err error
-		secretCmd, err = secretcmd.New(secretcmd.Config{
+		encryptCmd, err = encryptcmd.New(encryptcmd.Config{
 			Logger: config.Logger,
 			Stderr: config.Stderr,
 			Stdout: config.Stdout,
@@ -55,16 +59,14 @@ func New(config Config) (*cobra.Command, error) {
 	}
 
 	command := cobra.Command{
-		Use:           project.Name(),
-		Short:         project.Description(),
-		Long:          project.Description(),
-		RunE:          runner.Run,
-		SilenceErrors: true,
-		SilenceUsage:  true,
+		Use:   name,
+		Short: description,
+		Long:  description,
+		RunE:  runner.Run,
 	}
 
-	command.AddCommand(keyCmd)
-	command.AddCommand(secretCmd)
+	command.AddCommand(decryptCmd)
+	command.AddCommand(encryptCmd)
 
 	return &command, nil
 }
