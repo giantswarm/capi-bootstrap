@@ -1,0 +1,57 @@
+base: {{ .BaseDomain }}
+codename: {{ .ClusterName }}
+customer: {{ .Customer }}
+pipeline: {{ .Pipeline }}
+provider:
+  kind: {{ .Provider }}
+security:
+  restrictAccess:
+    enabled: false
+    api: false
+services:
+  alertmanager:
+    protocol: https
+    subDomain: alertmanager.{{ .ClusterName }}
+  athena:
+    protocol: https
+    subDomain: athena.{{ .ClusterName }}
+  api:
+    protocol: https
+    subDomain: api-unsupported.{{ .ClusterName }}
+  dex:
+    protocol: https
+    subDomain: dex.{{ .ClusterName }}
+  dexk8sauthenticator:
+    protocol: https
+    subDomain: login.{{ .ClusterName }}
+  grafana:
+    protocol: https
+    subDomain: grafana.{{ .ClusterName }}
+  happa:
+    protocol: https
+    subDomain: happa.{{ .ClusterName }}
+    port: 443
+  happaapi:
+    protocol: https
+    subDomain: happaapi.{{ .ClusterName }}
+  k8s:
+    protocol: https
+    subDomain: api.{{ .ClusterName }}
+    port: 6443
+  mayu:
+    subDomain: mayu-unsupported.{{ .ClusterName }}
+  passage:
+    protocol: https
+    subDomain: passage-unsupported.{{ .ClusterName }}
+  prometheus:
+    protocol: https
+    subDomain: prometheus.{{ .ClusterName }}
+  vault:
+    protocol: https
+    subDomain: vault-unsupported.{{ .ClusterName }}
+    port: 443
+managementCluster:
+  kubernetes:
+    api:
+      auth:
+        caPem: |{{ index .Secrets "kubernetes-ca" "cert" | nindent 10 }}

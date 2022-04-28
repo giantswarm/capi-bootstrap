@@ -13,7 +13,7 @@ const (
 
 type flags struct {
 	InputFile string
-	PublicKey   string
+	PublicKey string
 }
 
 func (f *flags) Init(cmd *cobra.Command) {

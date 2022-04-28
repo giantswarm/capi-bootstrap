@@ -3,6 +3,7 @@ package lastpass
 import (
 	"context"
 	"os"
+	"path/filepath"
 
 	"github.com/ansd/lastpass-go"
 	"github.com/giantswarm/microerror"
@@ -69,6 +70,8 @@ func (c *Client) CreateAccount(ctx context.Context, share, group, name, notes st
 		return nil, microerror.Mask(err)
 	}
 
+	c.clearCache()
+
 	return &toCreate, nil
 }
 
@@ -77,16 +80,34 @@ func (c *Client) GetAccount(ctx context.Context, share, group, name string) (*la
 		return nil, microerror.Mask(err)
 	}
 
-	accounts, err := c.client.Accounts(ctx)
-	if err != nil {
-		return nil, microerror.Mask(err)
+	if c.cachedAccounts == nil {
+		accounts, err := c.client.Accounts(ctx)
+		if err != nil {
+			return nil, microerror.Mask(err)
+		}
+		c.cachedAccounts = accounts
 	}
 
-	for _, account := range accounts {
+	for _, account := range c.cachedAccounts {
 		if account.Share == share && account.Name == name && account.Group == group {
 			return account, nil
 		}
 	}
 
-	return nil, microerror.Maskf(notFoundError, "account %s/%s/%s not found", share, group, name)
+	return nil, microerror.Maskf(notFoundError, "account %s not found", filepath.Join(share, group, name))
+}
+
+func (c *Client) DeleteAccount(ctx context.Context, id string) error {
+	if err := c.authenticate(ctx); err != nil {
+		return microerror.Mask(err)
+	}
+
+	c.clearCache()
+
+	err := c.client.Delete(ctx, &lastpass.Account{ID: id})
+	return microerror.Mask(err)
+}
+
+func (c *Client) clearCache() {
+	c.cachedAccounts = nil
 }

@@ -45,35 +45,35 @@ func (r *Runner) Do(ctx context.Context, _ *cobra.Command, _ []string) error {
 	outputStore := common.StoreForFormat(formats.Yaml)
 
 	/*
-	fileBytes, err := ioutil.ReadFile(r.flag.InputFile)
-	if err != nil {
-		return microerror.Mask(err)
-	}
+		fileBytes, err := ioutil.ReadFile(r.flag.InputFile)
+		if err != nil {
+			return microerror.Mask(err)
+		}
 
-	branches, err := inputStore.LoadPlainFile(fileBytes)
-	if err != nil {
-		return microerror.Mask(err)
-	}
+		branches, err := inputStore.LoadPlainFile(fileBytes)
+		if err != nil {
+			return microerror.Mask(err)
+		}
 
-	if err := ensureMetadata(branches[0]); err != nil {
-		return microerror.Mask(err)
-	}
+		if err := ensureMetadata(branches[0]); err != nil {
+			return microerror.Mask(err)
+		}
 
-	path, err := filepath.Abs(r.flag.InputFile)
-	if err != nil {
-		return microerror.Mask(err)
-	}
+		path, err := filepath.Abs(r.flag.InputFile)
+		if err != nil {
+			return microerror.Mask(err)
+		}
 
-	tree := sops.Tree{
-		Branches: branches,
-		Metadata: sops.Metadata{
-			EncryptedRegex:  "^(data|stringData)$",
-			Version:         project.Version(),
-			ShamirThreshold: 0,
-		},
-		FilePath: path,
-	}
-	 */
+		tree := sops.Tree{
+			Branches: branches,
+			Metadata: sops.Metadata{
+				EncryptedRegex:  "^(data|stringData)$",
+				Version:         project.Version(),
+				ShamirThreshold: 0,
+			},
+			FilePath: path,
+		}
+	*/
 
 	var keyServices []keyservice.KeyServiceClient
 	keyServices = append(keyServices, keyservice.NewLocalClient())
@@ -91,8 +91,8 @@ func (r *Runner) Do(ctx context.Context, _ *cobra.Command, _ []string) error {
 
 	_, err = common.DecryptTree(common.DecryptTreeOpts{
 		KeyServices: keyServices,
-		Tree:    tree,
-		Cipher:  cipher,
+		Tree:        tree,
+		Cipher:      cipher,
 	})
 	if err != nil {
 		return microerror.Mask(err)

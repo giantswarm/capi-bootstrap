@@ -1,0 +1,3 @@
+chartOperator:
+  cni:
+    install: true

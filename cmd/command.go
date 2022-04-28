@@ -6,8 +6,10 @@ import (
 	"github.com/giantswarm/microerror"
 	"github.com/spf13/cobra"
 
+	configcmd "github.com/giantswarm/capi-bootstrap/cmd/config"
 	keycmd "github.com/giantswarm/capi-bootstrap/cmd/key"
 	secretcmd "github.com/giantswarm/capi-bootstrap/cmd/secret"
+	secretscmd "github.com/giantswarm/capi-bootstrap/cmd/secrets"
 	"github.com/giantswarm/capi-bootstrap/pkg/project"
 )
 
@@ -20,6 +22,19 @@ func New(config Config) (*cobra.Command, error) {
 	}
 	if config.Stdout == nil {
 		config.Stdout = os.Stdout
+	}
+
+	var configCmd *cobra.Command
+	{
+		var err error
+		configCmd, err = configcmd.New(configcmd.Config{
+			Logger: config.Logger,
+			Stderr: config.Stderr,
+			Stdout: config.Stdout,
+		})
+		if err != nil {
+			return nil, microerror.Mask(err)
+		}
 	}
 
 	var keyCmd *cobra.Command
@@ -48,6 +63,19 @@ func New(config Config) (*cobra.Command, error) {
 		}
 	}
 
+	var secretsCmd *cobra.Command
+	{
+		var err error
+		secretsCmd, err = secretscmd.New(secretscmd.Config{
+			Logger: config.Logger,
+			Stderr: config.Stderr,
+			Stdout: config.Stdout,
+		})
+		if err != nil {
+			return nil, microerror.Mask(err)
+		}
+	}
+
 	runner := Runner{
 		logger: config.Logger,
 		stderr: config.Stderr,
@@ -63,8 +91,10 @@ func New(config Config) (*cobra.Command, error) {
 		SilenceUsage:  true,
 	}
 
+	command.AddCommand(configCmd)
 	command.AddCommand(keyCmd)
 	command.AddCommand(secretCmd)
+	command.AddCommand(secretsCmd)
 
 	return &command, nil
 }

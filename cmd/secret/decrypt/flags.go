@@ -7,7 +7,7 @@ import (
 )
 
 const (
-	flagInputFile = "input-file"
+	flagInputFile  = "input-file"
 	flagPrivateKey = "private-key"
 )
 
