@@ -5,12 +5,13 @@ go 1.17
 require (
 	filippo.io/age v1.0.0
 	github.com/ansd/lastpass-go v0.3.2
+	github.com/aws/aws-sdk-go v1.37.18
 	github.com/giantswarm/microerror v0.4.0
 	github.com/giantswarm/micrologger v0.6.0
-	github.com/mitchellh/go-wordwrap v1.0.1
 	github.com/spf13/cobra v1.2.1
 	go.mozilla.org/sops/v3 v3.7.2
 	k8s.io/api v0.23.5
+	k8s.io/apimachinery v0.23.5
 	sigs.k8s.io/yaml v1.3.0
 )
 
@@ -29,7 +30,6 @@ require (
 	github.com/Azure/go-autorest/logger v0.2.1 // indirect
 	github.com/Azure/go-autorest/tracing v0.6.0 // indirect
 	github.com/Microsoft/go-winio v0.4.16 // indirect
-	github.com/aws/aws-sdk-go v1.37.18 // indirect
 	github.com/blang/semver v3.5.1+incompatible // indirect
 	github.com/dimchansky/utfbom v1.1.0 // indirect
 	github.com/fatih/color v1.7.0 // indirect
@@ -63,6 +63,7 @@ require (
 	github.com/mattn/go-colorable v0.0.9 // indirect
 	github.com/mattn/go-isatty v0.0.3 // indirect
 	github.com/mitchellh/go-homedir v1.1.0 // indirect
+	github.com/mitchellh/go-wordwrap v1.0.1 // indirect
 	github.com/mitchellh/mapstructure v1.4.1 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
@@ -92,7 +93,6 @@ require (
 	gopkg.in/urfave/cli.v1 v1.20.0 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b // indirect
-	k8s.io/apimachinery v0.23.5 // indirect
 	k8s.io/klog/v2 v2.30.0 // indirect
 	k8s.io/utils v0.0.0-20211116205334-6203023598ed // indirect
 	sigs.k8s.io/json v0.0.0-20211020170558-c049b76a60c6 // indirect

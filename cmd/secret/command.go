@@ -12,7 +12,7 @@ import (
 
 const (
 	name        = "secret"
-	description = `Commands for managing sops secrets`
+	description = `Commands for managing the encryption of Kubernetes secrets`
 )
 
 func New(config Config) (*cobra.Command, error) {

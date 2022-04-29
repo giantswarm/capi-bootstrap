@@ -11,7 +11,7 @@ import (
 
 const (
 	name        = "secrets"
-	description = `Commands for managing installation-level secrets`
+	description = `Commands for managing installation secrets`
 )
 
 func New(config Config) (*cobra.Command, error) {

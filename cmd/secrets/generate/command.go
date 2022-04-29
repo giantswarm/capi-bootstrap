@@ -9,7 +9,7 @@ import (
 
 const (
 	name        = "generate"
-	description = `Generates configuration files for a new management cluster`
+	description = `Generate configuration files for a new management cluster`
 )
 
 func New(config Config) (*cobra.Command, error) {

@@ -10,18 +10,13 @@ import (
 	"github.com/giantswarm/microerror"
 	"sigs.k8s.io/yaml"
 
-	"github.com/giantswarm/capi-bootstrap/pkg/generator/generators/awsiam"
-	"github.com/giantswarm/capi-bootstrap/pkg/generator/generators/ca"
-	"github.com/giantswarm/capi-bootstrap/pkg/generator/generators/githuboauth"
-	"github.com/giantswarm/capi-bootstrap/pkg/generator/generators/lastpass"
-	"github.com/giantswarm/capi-bootstrap/pkg/generator/generators/taylorbot"
-	"github.com/giantswarm/capi-bootstrap/pkg/generator/secret"
+	"github.com/giantswarm/capi-bootstrap/pkg/key"
 )
 
 //go:embed openstack
 var openstackDirectory embed.FS
 
-func LoadProvider(provider string) ([]secret.GeneratedSecretDefinition, []TemplateFile, error) {
+func LoadProvider(provider string) ([]TemplateSecret, []TemplateFile, error) {
 	var directory fs.FS
 	switch provider {
 	case "openstack":
@@ -34,12 +29,12 @@ func LoadProvider(provider string) ([]secret.GeneratedSecretDefinition, []Templa
 		return nil, nil, microerror.Mask(errors.New("invalid provider"))
 	}
 
-	secretsFile, err := fs.ReadFile(directory, "secrets_ci.yaml")
+	secretsFile, err := fs.ReadFile(directory, "secrets.yaml")
 	if err != nil {
 		return nil, nil, microerror.Mask(err)
 	}
 
-	var secrets []secret.GeneratedSecretDefinition
+	var secrets []TemplateSecret
 	err = yaml.Unmarshal(secretsFile, &secrets)
 	if err != nil {
 		return nil, nil, microerror.Mask(err)
@@ -76,7 +71,7 @@ func LoadProvider(provider string) ([]secret.GeneratedSecretDefinition, []Templa
 	return secrets, templates, microerror.Mask(err)
 }
 
-func validateSecrets(secrets []secret.GeneratedSecretDefinition) error {
+func validateSecrets(secrets []TemplateSecret) error {
 	keys := map[string]struct{}{}
 	for i, secretDefinition := range secrets {
 		// Make sure key isn't empty
@@ -96,13 +91,13 @@ func validateSecrets(secrets []secret.GeneratedSecretDefinition) error {
 		keys[secretDefinition.Key] = struct{}{}
 
 		switch secretDefinition.Generator {
-		case awsiam.Name:
-			return microerror.Maskf(invalidTemplateError, "generator %s is not yet implemented", awsiam.Name)
-		case ca.Name:
+		case key.GeneratorNameAWSIAM:
+			return microerror.Maskf(invalidTemplateError, "generator %s is not yet implemented", key.GeneratorNameAWSIAM)
+		case key.GeneratorNameCA:
 			// fall through
-		case githuboauth.Name:
+		case key.GeneratorNameGitHubOAuth:
 			// fall through
-		case lastpass.Name:
+		case key.GeneratorNameLastpass:
 			if secretDefinition.Lastpass == nil {
 				return microerror.Maskf(invalidTemplateError, "lastpass generator inputs missing for secret %s", secretDefinition.Key)
 			}
@@ -113,7 +108,7 @@ func validateSecrets(secrets []secret.GeneratedSecretDefinition) error {
 			if secretRef.Name == "" {
 				return microerror.Maskf(invalidTemplateError, "lastpass secret name is required for secret %s", secretDefinition.Key)
 			}
-		case taylorbot.Name:
+		case key.GeneratorNameTaylorbot:
 			// fall through
 		default:
 			return microerror.Maskf(invalidTemplateError, "unknown generator %s for secret %s", secretDefinition.Generator, secretDefinition.Key)

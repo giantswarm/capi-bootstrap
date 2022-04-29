@@ -40,11 +40,24 @@ func (f *flags) Init(cmd *cobra.Command) {
 }
 
 func (f *flags) Validate() error {
-	if f.InstallationSecretsFile == "" {
-		return microerror.Maskf(invalidFlagError, "--%s must not be empty", flagInstallationSecretsFile)
+	if f.BaseDomain == "" {
+		return microerror.Maskf(invalidFlagError, "--%s must not be empty", flagBaseDomain)
+	}
+	if f.ClusterName == "" {
+		return microerror.Maskf(invalidFlagError, "--%s must not be empty", flagClusterName)
+	}
+	if f.Customer == "" {
+		return microerror.Maskf(invalidFlagError, "--%s must not be empty", flagCustomer)
+	}
+	if f.Pipeline == "" {
+		return microerror.Maskf(invalidFlagError, "--%s must not be empty", flagPipeline)
 	}
 	if f.Provider == "" {
 		return microerror.Maskf(invalidFlagError, "--%s must not be empty", flagProvider)
+	}
+
+	if f.InstallationSecretsFile == "" {
+		return microerror.Maskf(invalidFlagError, "--%s must not be empty", flagInstallationSecretsFile)
 	}
 	if f.OutputDirectory == "" {
 		return microerror.Maskf(invalidFlagError, "--%s must not be empty", flagOutputDirectory)

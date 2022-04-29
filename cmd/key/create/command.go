@@ -9,7 +9,7 @@ import (
 
 const (
 	name        = "create"
-	description = `Creates a management cluster encryption key in the password manager`
+	description = `Create a management cluster encryption key in the password manager fetching an existing key if it already exists. Will print the public and private key as environment variables SOPS_AGE_RECIPIENTS and SOPS_AGE_KEY respectively for use by other commands.`
 )
 
 func New(config Config) (*cobra.Command, error) {

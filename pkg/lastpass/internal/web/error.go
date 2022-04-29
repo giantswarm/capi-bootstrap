@@ -1,4 +1,4 @@
-package delete
+package web
 
 import "github.com/giantswarm/microerror"
 
@@ -11,11 +11,11 @@ func IsInvalidConfig(err error) bool {
 	return microerror.Cause(err) == invalidConfigError
 }
 
-var invalidFlagError = &microerror.Error{
-	Kind: "invalidFlagError",
+var unauthenticatedError = &microerror.Error{
+	Kind: "unauthenticatedError",
 }
 
-// IsInvalidFlag asserts invalidFlagError.
-func IsInvalidFlag(err error) bool {
-	return microerror.Cause(err) == invalidFlagError
+// IsUnauthenticated asserts unauthenticatedError.
+func IsUnauthenticated(err error) bool {
+	return microerror.Cause(err) == unauthenticatedError
 }

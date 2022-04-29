@@ -2,7 +2,7 @@ package create
 
 import (
 	"context"
-	"encoding/json"
+	"fmt"
 
 	"github.com/giantswarm/microerror"
 	"github.com/spf13/cobra"
@@ -40,11 +40,10 @@ func (r *Runner) Do(ctx context.Context, _ *cobra.Command, _ []string) error {
 		return microerror.Mask(err)
 	}
 
-	output, err := json.Marshal(encryptionKey)
-	if err != nil {
-		return microerror.Mask(err)
-	}
+	output := fmt.Sprintf(`export SOPS_AGE_KEY=%s
+export SOPS_AGE_RECIPIENTS=%s
+`, encryptionKey.PrivateKey, encryptionKey.PublicKey)
 
-	_, err = r.stdout.Write(output)
+	_, err = r.stdout.Write([]byte(output))
 	return microerror.Mask(err)
 }

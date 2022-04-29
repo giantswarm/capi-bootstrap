@@ -14,7 +14,7 @@ import (
 	core "k8s.io/api/core/v1"
 	"sigs.k8s.io/yaml"
 
-	"github.com/giantswarm/capi-bootstrap/pkg/generator/secret"
+	"github.com/giantswarm/capi-bootstrap/pkg/sops"
 	"github.com/giantswarm/capi-bootstrap/pkg/templates"
 )
 
@@ -38,37 +38,45 @@ func yamlIsEncrypted(data []byte) (bool, error) {
 	return keyExists, nil
 }
 
-func loadInstallationSecrets(path string, templateSecrets []secret.GeneratedSecretDefinition) (map[string]interface{}, error) {
+func loadInstallationSecrets(ctx context.Context, path string, templateSecrets []templates.TemplateSecret) (map[string]interface{}, error) {
 	installationSecretsFile, err := os.ReadFile(path)
 	if err != nil {
 		return nil, microerror.Mask(err)
 	}
 
+	var installationSecretsSecret *core.Secret
 	if isEncrypted, err := yamlIsEncrypted(installationSecretsFile); err != nil {
 		return nil, microerror.Mask(err)
 	} else if isEncrypted {
-		// TODO: we could decrypt here in the future
-		return nil, microerror.Maskf(invalidConfigError, "installation secrets must be decrypted before being passed to this command")
-	}
-
-	var asSecret core.Secret
-	err = yaml.Unmarshal(installationSecretsFile, &asSecret)
-	if err != nil {
-		return nil, microerror.Mask(err)
+		sopsClient, err := sops.New(sops.Config{})
+		if err != nil {
+			return nil, microerror.Mask(err)
+		}
+		installationSecretsSecret, err = sopsClient.DecryptSecret(ctx, installationSecretsFile)
+		if err != nil {
+			return nil, microerror.Mask(err)
+		}
+	} else {
+		var secret core.Secret
+		err = yaml.Unmarshal(installationSecretsFile, &secret)
+		if err != nil {
+			return nil, microerror.Mask(err)
+		}
+		installationSecretsSecret = &secret
 	}
 
 	// Support both stringData and data (stringData is easier to read since values are not base64 encoded)
 	installationSecrets := map[string]interface{}{}
-	if asSecret.StringData != nil {
-		for key, valueString := range asSecret.StringData {
+	if installationSecretsSecret.StringData != nil {
+		for key, valueString := range installationSecretsSecret.StringData {
 			value, err := parseValue([]byte(valueString), false)
 			if err != nil {
 				return nil, microerror.Mask(err)
 			}
 			installationSecrets[key] = value
 		}
-	} else if asSecret.Data != nil {
-		for key, valueEncoded := range asSecret.Data {
+	} else if installationSecretsSecret.Data != nil {
+		for key, valueEncoded := range installationSecretsSecret.Data {
 			value, err := parseValue(valueEncoded, true)
 			if err != nil {
 				return nil, microerror.Mask(err)
@@ -106,9 +114,18 @@ func (r *Runner) Do(ctx context.Context, _ *cobra.Command, _ []string) error {
 		return microerror.Mask(err)
 	}
 
-	installationSecrets, err := loadInstallationSecrets(r.flag.InstallationSecretsFile, templateSecrets)
+	installationSecrets, err := loadInstallationSecrets(ctx, r.flag.InstallationSecretsFile, templateSecrets)
 	if err != nil {
 		return microerror.Mask(err)
+	}
+
+	templateData := templates.TemplateData{
+		BaseDomain:  r.flag.BaseDomain,
+		ClusterName: r.flag.ClusterName,
+		Customer:    r.flag.Customer,
+		Pipeline:    r.flag.Pipeline,
+		Provider:    r.flag.Provider,
+		Secrets:     installationSecrets,
 	}
 
 	for _, file := range templateFiles {
@@ -118,14 +135,7 @@ func (r *Runner) Do(ctx context.Context, _ *cobra.Command, _ []string) error {
 		}
 
 		var rendered bytes.Buffer
-		err = template.Execute(&rendered, templates.TemplateData{
-			BaseDomain:  r.flag.BaseDomain,
-			ClusterName: r.flag.ClusterName,
-			Customer:    r.flag.Customer,
-			Pipeline:    r.flag.Pipeline,
-			Provider:    r.flag.Provider,
-			Secrets:     installationSecrets,
-		})
+		err = template.Execute(&rendered, templateData)
 		if err != nil {
 			return microerror.Mask(err)
 		}

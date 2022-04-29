@@ -7,7 +7,7 @@ import (
 	"github.com/giantswarm/microerror"
 
 	"github.com/giantswarm/capi-bootstrap/pkg/generator/config"
-	"github.com/giantswarm/capi-bootstrap/pkg/generator/secret"
+	"github.com/giantswarm/capi-bootstrap/pkg/templates"
 )
 
 const Name = "githuboauth"
@@ -18,12 +18,16 @@ func New(config config.Config) (*Generator, error) {
 	}, nil
 }
 
-func (l Generator) Generate(ctx context.Context, secret secret.GeneratedSecretDefinition) (interface{}, error) {
+func (l Generator) Generate(ctx context.Context, secret templates.TemplateSecret, installation templates.InstallationInputs) (interface{}, error) {
+	applicationName := fmt.Sprintf("%s-dex", installation.ClusterName)
+	homepageURL := fmt.Sprintf("https://dex.%s.%s", installation.ClusterName, installation.BaseDomain)
+	description := fmt.Sprintf("%s dex OIDC app", installation.ClusterName)
+	callbackURL := fmt.Sprintf("https://dex.%s.%s/callback", installation.ClusterName, installation.BaseDomain)
 	fmt.Println("Please visit https://github.com/organizations/giantswarm/settings/applications/new to set up a new OAuth app")
-	fmt.Printf("Set 'Application name' to: %s-dex\n", secret.ClusterName)
-	fmt.Printf("Set 'Homepage URL' to: https://dex.%s.%s\n", secret.ClusterName, secret.BaseDomain)
-	fmt.Printf("Set 'Application description' to: %s dex OIDC app\n", secret.ClusterName)
-	fmt.Printf("Set 'Authorization callback URL' to: https://dex.%s.%s/callback\n", secret.ClusterName, secret.BaseDomain)
+	fmt.Printf("Set 'Application name' to: %s\n", applicationName)
+	fmt.Printf("Set 'Homepage URL' to: %s\n", homepageURL)
+	fmt.Printf("Set 'Application description' to: %s\n", description)
+	fmt.Printf("Set 'Authorization callback URL' to: %s\n", callbackURL)
 	fmt.Println("Leave 'Enable Device Flow' disabled")
 	fmt.Println("Click 'Register application'")
 

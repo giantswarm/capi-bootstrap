@@ -13,6 +13,7 @@ import (
 
 	"github.com/giantswarm/capi-bootstrap/pkg/generator/config"
 	"github.com/giantswarm/capi-bootstrap/pkg/lastpass"
+	"github.com/giantswarm/capi-bootstrap/pkg/sops"
 	"github.com/giantswarm/capi-bootstrap/pkg/templates"
 )
 
@@ -37,6 +38,16 @@ func (r *Runner) Do(ctx context.Context, _ *cobra.Command, _ []string) error {
 		return microerror.Mask(err)
 	}
 
+	var sopsClient *sops.Client
+	if r.flag.Encrypt {
+		sopsClient, err = sops.New(sops.Config{
+			LastpassClient: lastpassClient,
+		})
+		if err != nil {
+			return microerror.Mask(err)
+		}
+	}
+
 	generators, err := buildGenerators(config.Config{
 		AWSSession:     awsSession,
 		LastpassClient: lastpassClient,
@@ -50,17 +61,19 @@ func (r *Runner) Do(ctx context.Context, _ *cobra.Command, _ []string) error {
 		return microerror.Mask(err)
 	}
 
+	installationInputs := templates.InstallationInputs{
+		BaseDomain:  r.flag.BaseDomain,
+		ClusterName: r.flag.ClusterName,
+	}
+
 	secrets := map[string]string{}
-	for _, secretDefinition := range templateSecrets {
-		gen, ok := generators[secretDefinition.Generator]
+	for _, templateSecret := range templateSecrets {
+		gen, ok := generators[templateSecret.Generator]
 		if !ok {
-			return microerror.Maskf(invalidConfigError, "invalid generator %s", secretDefinition.Generator)
+			return microerror.Maskf(invalidConfigError, "invalid generator %s", templateSecret.Generator)
 		}
 
-		secretDefinition.BaseDomain = r.flag.BaseDomain
-		secretDefinition.ClusterName = r.flag.ClusterName
-
-		generated, err := gen.Generate(ctx, secretDefinition)
+		generated, err := gen.Generate(ctx, templateSecret, installationInputs)
 		if err != nil {
 			return microerror.Mask(err)
 		}
@@ -70,7 +83,7 @@ func (r *Runner) Do(ctx context.Context, _ *cobra.Command, _ []string) error {
 			return microerror.Mask(err)
 		}
 
-		secrets[secretDefinition.Key] = strings.TrimSpace(string(secretYAML))
+		secrets[templateSecret.Key] = strings.TrimSpace(string(secretYAML))
 	}
 
 	secret := core.Secret{
@@ -79,14 +92,23 @@ func (r *Runner) Do(ctx context.Context, _ *cobra.Command, _ []string) error {
 			APIVersion: "v1",
 		},
 		ObjectMeta: v1.ObjectMeta{
-			Name:      "generated-secrets",
+			Name:      "installation-secrets",
 			Namespace: "giantswarm",
 		},
 		StringData: secrets,
 	}
-	rendered, err := yaml.Marshal(secret)
-	if err != nil {
-		return microerror.Mask(err)
+
+	var rendered []byte
+	if r.flag.Encrypt {
+		rendered, err = sopsClient.EncryptSecret(ctx, &secret)
+		if err != nil {
+			return microerror.Mask(err)
+		}
+	} else {
+		rendered, err = yaml.Marshal(secret)
+		if err != nil {
+			return microerror.Mask(err)
+		}
 	}
 
 	_, err = r.stdout.Write(rendered)

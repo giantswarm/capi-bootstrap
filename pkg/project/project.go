@@ -1,7 +1,7 @@
 package project
 
 var (
-	description = "Tool for bootstrapping or tearing down CAPI management clusters"
+	description = "Tool for automating the configuration of CAPI management clusters"
 	gitSHA      = "n/a"
 	name        = "capi-bootstrap"
 	source      = "https://github.com/giantswarm/capi-bootstrap"

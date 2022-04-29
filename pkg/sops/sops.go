@@ -3,6 +3,7 @@ package sops
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"os"
 	"os/exec"
 
@@ -11,16 +12,11 @@ import (
 	core "k8s.io/api/core/v1"
 	"sigs.k8s.io/yaml"
 
+	"github.com/giantswarm/capi-bootstrap/pkg/key"
 	"github.com/giantswarm/capi-bootstrap/pkg/lastpass"
 )
 
 func New(config Config) (*Client, error) {
-	if config.ClusterName == "" {
-		return nil, microerror.Maskf(invalidConfigError, "%T.ClusterName must not be empty", config)
-	}
-	if config.LastpassClient == nil {
-		return nil, microerror.Maskf(invalidConfigError, "%T.LastpassClient must not be empty", config)
-	}
 	return &Client{
 		lastpassClient: config.LastpassClient,
 		clusterName:    config.ClusterName,
@@ -28,7 +24,7 @@ func New(config Config) (*Client, error) {
 }
 
 func (c *Client) EnsureEncryptionKey(ctx context.Context) (*EncryptionKey, error) {
-	_, err := c.loadEncryptionKey(ctx)
+	err := c.LoadPrivateKey(ctx)
 	if lastpass.IsNotFound(err) {
 		// fall through
 	} else if err != nil {
@@ -42,40 +38,72 @@ func (c *Client) EnsureEncryptionKey(ctx context.Context) (*EncryptionKey, error
 		return nil, microerror.Mask(err)
 	}
 
-	_, err = c.lastpassClient.CreateAccount(ctx, "Shared-Team Rocket", "Encryption Keys", c.clusterName, c.encryptionKey.PrivateKey)
+	share := key.EncryptionKeySecretShare
+	group := key.EncryptionKeySecretGroup
+	name := key.EncryptionKeySecretName(c.clusterName)
+
+	_, err = c.lastpassClient.Create(ctx, share, group, name, c.encryptionKey.PrivateKey)
 	return c.encryptionKey, microerror.Mask(err)
 }
 
 func (c *Client) DeleteEncryptionKey(ctx context.Context) error {
-	account, err := c.lastpassClient.GetAccount(ctx, "Shared-Team Rocket", "Encryption Keys", c.clusterName)
+	share := key.EncryptionKeySecretShare
+	group := key.EncryptionKeySecretGroup
+	name := key.EncryptionKeySecretName(c.clusterName)
+
+	account, err := c.lastpassClient.Get(ctx, share, group, name)
 	if lastpass.IsNotFound(err) {
 		return nil // already deleted, nothing to do
 	} else if err != nil {
 		return microerror.Mask(err)
 	}
 
-	err = c.lastpassClient.DeleteAccount(ctx, account.ID)
+	err = c.lastpassClient.Delete(ctx, account.ID)
 	return microerror.Mask(err)
 }
 
-func (c *Client) EncryptSecret(secret *core.Secret) ([]byte, error) {
-	pipeRead, pipeWrite, err := os.Pipe()
-	if err != nil {
-		return nil, err
-	}
-
-	secretContent, err := yaml.Marshal(secret)
+func (c *Client) EncryptSecret(ctx context.Context, secret *core.Secret) ([]byte, error) {
+	secretYAML, err := yaml.Marshal(secret)
 	if err != nil {
 		return nil, microerror.Mask(err)
 	}
 
-	_, err = pipeWrite.Write(secretContent)
+	encrypted, err := c.encryptYAML(ctx, secretYAML, "^(data|stringData)$")
+	return encrypted, microerror.Mask(err)
+}
+
+func (c *Client) encryptYAML(ctx context.Context, plaintext []byte, encryptedRegex string) ([]byte, error) {
+	err := ensureSopsMetadata(plaintext, false)
 	if err != nil {
 		return nil, microerror.Mask(err)
 	}
 
-	sopsCommand := exec.Command("sops", "--encrypted-regex", "^(data|stringData)$", "--encrypt", "--age", c.encryptionKey.PublicKey, "--input-type", "yaml", "--output-type", "yaml", "/dev/stdin")
-	sopsCommand.Stdin = pipeRead
+	err = c.LoadPublicKey(ctx)
+	if err != nil {
+		return nil, microerror.Mask(err)
+	}
+
+	args := []string{
+		"--encrypt",
+		"--age",
+		c.encryptionKey.PublicKey,
+		"--input-type",
+		"yaml",
+		"--output-type",
+		"yaml",
+		"/dev/stdin",
+	}
+	if encryptedRegex != "" {
+		args = append([]string{"--encrypted-regex", encryptedRegex}, args...)
+	}
+
+	sopsCommand := exec.CommandContext(ctx, "sops", args...)
+
+	stdIn, err := sopsCommand.StdinPipe()
+	if err != nil {
+		return nil, microerror.Mask(err)
+	}
+
 	var sopsOut bytes.Buffer
 	sopsCommand.Stdout = &sopsOut
 	var sopsErr bytes.Buffer
@@ -86,7 +114,12 @@ func (c *Client) EncryptSecret(secret *core.Secret) ([]byte, error) {
 		return nil, microerror.Mask(err)
 	}
 
-	err = pipeWrite.Close()
+	_, err = stdIn.Write(plaintext)
+	if err != nil {
+		return nil, microerror.Mask(err)
+	}
+
+	err = stdIn.Close()
 	if err != nil {
 		return nil, microerror.Mask(err)
 	}
@@ -99,21 +132,50 @@ func (c *Client) EncryptSecret(secret *core.Secret) ([]byte, error) {
 	return sopsOut.Bytes(), nil
 }
 
-func (c *Client) DecryptSecret(encrypted []byte) (*core.Secret, error) {
+func (c *Client) EncryptYAML(ctx context.Context, data []byte) ([]byte, error) {
+	encrypted, err := c.encryptYAML(ctx, data, "")
+	return encrypted, microerror.Mask(err)
+}
+
+func (c *Client) DecryptSecret(ctx context.Context, encryptedYAML []byte) (*core.Secret, error) {
+	decryptedYAML, err := c.decryptYAML(ctx, encryptedYAML)
+	if err != nil {
+		return nil, microerror.Mask(err)
+	}
+
+	var secret core.Secret
+	err = yaml.Unmarshal(decryptedYAML, &secret)
+	return &secret, microerror.Mask(err)
+}
+
+func (c *Client) decryptYAML(ctx context.Context, encrypted []byte) ([]byte, error) {
+	err := ensureSopsMetadata(encrypted, true)
+	if err != nil {
+		return nil, microerror.Mask(err)
+	}
+
+	err = c.LoadPrivateKey(ctx)
+	if err != nil {
+		return nil, microerror.Mask(err)
+	}
+
 	pipeRead, pipeWrite, err := os.Pipe()
 	if err != nil {
 		return nil, err
 	}
 
-	err = os.WriteFile("/tmp/age.key", []byte(c.encryptionKey.PrivateKey), 0644)
-	if err != nil {
-		return nil, err
+	args := []string{
+		"--decrypt",
+		"--input-type",
+		"yaml",
+		"--output-type",
+		"yaml",
+		"/dev/stdin",
 	}
-	defer os.Remove("/tmp/age.key")
 
-	sopsCommand := exec.Command("sops", "--decrypt", "--input-type", "yaml", "--output-type", "yaml", "/dev/stdin")
+	sopsCommand := exec.CommandContext(ctx, "sops", args...)
 	sopsCommand.Env = []string{
-		"SOPS_AGE_KEY_FILE=/tmp/age.key",
+		fmt.Sprintf("SOPS_AGE_KEY=%s", c.encryptionKey.PrivateKey),
 	}
 	sopsCommand.Stdin = pipeRead
 	var sopsOut bytes.Buffer
@@ -138,19 +200,18 @@ func (c *Client) DecryptSecret(encrypted []byte) (*core.Secret, error) {
 
 	err = sopsCommand.Wait()
 	if err != nil {
-		return nil, microerror.Mask(err)
+		return nil, microerror.Maskf(commandFailedError, sopsErr.String())
 	}
 
-	var decryptedSecret core.Secret
-	err = yaml.Unmarshal(sopsOut.Bytes(), &decryptedSecret)
+	return sopsOut.Bytes(), nil
+}
+
+func (c *Client) RenderConfig(ctx context.Context) ([]byte, error) {
+	err := c.LoadPublicKey(ctx)
 	if err != nil {
 		return nil, microerror.Mask(err)
 	}
 
-	return &decryptedSecret, nil
-}
-
-func (c *Client) RenderConfig() (string, error) {
 	creationRule := CreationRule{
 		PathRegex:      ".*.yaml",
 		EncryptedRegex: "^(data|stringData)$",
@@ -160,7 +221,7 @@ func (c *Client) RenderConfig() (string, error) {
 	case "age":
 		creationRule.Age = c.encryptionKey.PublicKey
 	default:
-		return "", microerror.Maskf(invalidConfigError, "unsupported encryption type %s", c.encryptionKey.Type)
+		return nil, microerror.Maskf(invalidConfigError, "unsupported encryption type %s", c.encryptionKey.Type)
 	}
 
 	content, err := yaml.Marshal(SopsConfig{
@@ -169,22 +230,86 @@ func (c *Client) RenderConfig() (string, error) {
 		},
 	})
 	if err != nil {
-		return "", microerror.Mask(err)
+		return nil, microerror.Mask(err)
 	}
 
-	return string(content), nil
+	return content, nil
 }
 
-func (c *Client) loadEncryptionKey(ctx context.Context) (*EncryptionKey, error) {
+func (c *Client) LoadPublicKey(ctx context.Context) error {
 	if c.encryptionKey == nil {
-		encryptionKeyAccount, err := c.lastpassClient.GetAccount(ctx, "Shared-Team Rocket", "Encryption Keys", c.clusterName)
-		if err != nil {
-			return nil, microerror.Mask(err)
+		var publicKey string
+		if value, ok := os.LookupEnv("SOPS_AGE_RECIPIENTS"); ok {
+			publicKey = value
+		} else if publicKey == "" {
+			if c.lastpassClient == nil {
+				return microerror.Maskf(invalidConfigError, "SOPS_AGE_RECIPIENTS environment variable not defined and lastpass client not initialized")
+			}
+
+			share := key.EncryptionKeySecretShare
+			group := key.EncryptionKeySecretGroup
+			name := key.EncryptionKeySecretName(c.clusterName)
+
+			var err error
+			encryptionKeyAccount, err := c.lastpassClient.Get(ctx, share, group, name)
+			if err != nil {
+				return microerror.Mask(err)
+			}
+
+			identity, err := age.ParseX25519Identity(encryptionKeyAccount.Notes)
+			if err != nil {
+				return microerror.Mask(err)
+			}
+
+			publicKey = identity.Recipient().String()
 		}
 
-		identity, err := age.ParseX25519Identity(encryptionKeyAccount.Notes)
+		recipient, err := age.ParseX25519Recipient(publicKey)
 		if err != nil {
-			return nil, microerror.Mask(err)
+			return microerror.Mask(err)
+		}
+
+		c.encryptionKey = &EncryptionKey{
+			PublicKey: recipient.String(),
+			Type:      "age",
+		}
+	}
+
+	return nil
+}
+
+func (c *Client) LoadPrivateKey(ctx context.Context) error {
+	if c.encryptionKey == nil || c.encryptionKey.PrivateKey == "" {
+		var privateKey string
+		if value, ok := os.LookupEnv("SOPS_AGE_KEY_FILE"); ok {
+			contents, err := os.ReadFile(value)
+			if err != nil {
+				return microerror.Mask(err)
+			}
+			privateKey = string(contents)
+		} else if value, ok := os.LookupEnv("SOPS_AGE_KEY"); ok {
+			privateKey = value
+		} else {
+			if c.lastpassClient == nil {
+				return microerror.Maskf(invalidConfigError, "SOPS_AGE_KEY_FILE/SOPS_AGE_KEY environment variable not defined and lastpass client not initialized")
+			}
+
+			share := key.EncryptionKeySecretShare
+			group := key.EncryptionKeySecretGroup
+			name := key.EncryptionKeySecretName(c.clusterName)
+
+			var err error
+			encryptionKeyAccount, err := c.lastpassClient.Get(ctx, share, group, name)
+			if err != nil {
+				return microerror.Mask(err)
+			}
+
+			privateKey = encryptionKeyAccount.Notes
+		}
+
+		identity, err := age.ParseX25519Identity(privateKey)
+		if err != nil {
+			return microerror.Mask(err)
 		}
 
 		c.encryptionKey = &EncryptionKey{
@@ -194,7 +319,23 @@ func (c *Client) loadEncryptionKey(ctx context.Context) (*EncryptionKey, error) 
 		}
 	}
 
-	return c.encryptionKey, nil
+	return nil
+}
+
+func ensureSopsMetadata(content []byte, exists bool) error {
+	var mapData map[string]interface{}
+	err := yaml.Unmarshal(content, &mapData)
+	if err != nil {
+		return microerror.Mask(err)
+	}
+
+	if _, ok := mapData["sops"]; exists && !ok {
+		return microerror.Maskf(invalidConfigError, "input file already encrypted")
+	} else if ok && !exists {
+		return microerror.Maskf(invalidConfigError, "input file not encrypted")
+	}
+
+	return nil
 }
 
 func generateEncryptionKey() (*EncryptionKey, error) {

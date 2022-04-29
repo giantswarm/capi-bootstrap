@@ -15,7 +15,7 @@ import (
 	"github.com/giantswarm/microerror"
 
 	"github.com/giantswarm/capi-bootstrap/pkg/generator/config"
-	"github.com/giantswarm/capi-bootstrap/pkg/generator/secret"
+	"github.com/giantswarm/capi-bootstrap/pkg/templates"
 )
 
 const Name = "ca"
@@ -24,7 +24,7 @@ func New(_ config.Config) (*Generator, error) {
 	return &Generator{}, nil
 }
 
-func (l Generator) Generate(_ context.Context, secret secret.GeneratedSecretDefinition) (interface{}, error) {
+func (l Generator) Generate(_ context.Context, secret templates.TemplateSecret, installation templates.InstallationInputs) (interface{}, error) {
 	ca := &x509.Certificate{
 		SerialNumber: big.NewInt(2019),
 		Subject: pkix.Name{

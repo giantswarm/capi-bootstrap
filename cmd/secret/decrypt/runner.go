@@ -2,14 +2,14 @@ package encrypt
 
 import (
 	"context"
+	"os"
 
 	"github.com/giantswarm/microerror"
 	"github.com/spf13/cobra"
-	"go.mozilla.org/sops/v3"
-	"go.mozilla.org/sops/v3/aes"
-	"go.mozilla.org/sops/v3/cmd/sops/common"
-	"go.mozilla.org/sops/v3/cmd/sops/formats"
-	"go.mozilla.org/sops/v3/keyservice"
+	"sigs.k8s.io/yaml"
+
+	"github.com/giantswarm/capi-bootstrap/pkg/lastpass"
+	"github.com/giantswarm/capi-bootstrap/pkg/sops"
 )
 
 func (r *Runner) Run(cmd *cobra.Command, args []string) error {
@@ -22,87 +22,35 @@ func (r *Runner) Run(cmd *cobra.Command, args []string) error {
 	return microerror.Mask(err)
 }
 
-func ensureNoMetadata(branch sops.TreeBranch) error {
-	for _, b := range branch {
-		if b.Key == "sops" {
-			return microerror.Maskf(invalidConfigError, "input file already encrypted")
-		}
-	}
-	return nil
-}
-
-func ensureMetadata(branch sops.TreeBranch) error {
-	for _, b := range branch {
-		if b.Key == "sops" {
-			return nil
-		}
-	}
-	return microerror.Maskf(invalidConfigError, "input file not encrypted")
-}
-
 func (r *Runner) Do(ctx context.Context, _ *cobra.Command, _ []string) error {
-	inputStore := common.StoreForFormat(formats.Yaml)
-	outputStore := common.StoreForFormat(formats.Yaml)
-
-	/*
-		fileBytes, err := ioutil.ReadFile(r.flag.InputFile)
-		if err != nil {
-			return microerror.Mask(err)
-		}
-
-		branches, err := inputStore.LoadPlainFile(fileBytes)
-		if err != nil {
-			return microerror.Mask(err)
-		}
-
-		if err := ensureMetadata(branches[0]); err != nil {
-			return microerror.Mask(err)
-		}
-
-		path, err := filepath.Abs(r.flag.InputFile)
-		if err != nil {
-			return microerror.Mask(err)
-		}
-
-		tree := sops.Tree{
-			Branches: branches,
-			Metadata: sops.Metadata{
-				EncryptedRegex:  "^(data|stringData)$",
-				Version:         project.Version(),
-				ShamirThreshold: 0,
-			},
-			FilePath: path,
-		}
-	*/
-
-	var keyServices []keyservice.KeyServiceClient
-	keyServices = append(keyServices, keyservice.NewLocalClient())
-
-	cipher := aes.NewCipher()
-	tree, err := common.LoadEncryptedFileWithBugFixes(common.GenericDecryptOpts{
-		Cipher:      cipher,
-		InputStore:  inputStore,
-		InputPath:   r.flag.InputFile,
-		KeyServices: keyServices,
-	})
+	lastpassClient, err := lastpass.New()
 	if err != nil {
-		return err
+		return microerror.Mask(err)
 	}
 
-	_, err = common.DecryptTree(common.DecryptTreeOpts{
-		KeyServices: keyServices,
-		Tree:        tree,
-		Cipher:      cipher,
+	sopsClient, err := sops.New(sops.Config{
+		LastpassClient: lastpassClient,
+		ClusterName:    r.flag.ClusterName,
 	})
 	if err != nil {
 		return microerror.Mask(err)
 	}
 
-	decryptedFile, err := outputStore.EmitPlainFile(tree.Branches)
+	inputFile, err := os.ReadFile(r.flag.InputFile)
 	if err != nil {
 		return microerror.Mask(err)
 	}
 
-	_, err = r.stdout.Write(decryptedFile)
+	decrypted, err := sopsClient.DecryptSecret(ctx, inputFile)
+	if err != nil {
+		return microerror.Mask(err)
+	}
+
+	decryptedYAML, err := yaml.Marshal(decrypted)
+	if err != nil {
+		return microerror.Mask(err)
+	}
+
+	_, err = r.stdout.Write(decryptedYAML)
 	return microerror.Mask(err)
 }

@@ -7,26 +7,23 @@ import (
 )
 
 const (
-	flagInputFile = "input-file"
-	flagPublicKey = "public-key"
+	flagClusterName = "cluster-name"
+	flagInputFile   = "input-file"
 )
 
 type flags struct {
-	InputFile string
-	PublicKey string
+	ClusterName string
+	InputFile   string
 }
 
 func (f *flags) Init(cmd *cobra.Command) {
+	cmd.Flags().StringVar(&f.InputFile, flagClusterName, "", `Management cluster name (optional). If SOPS_AGE_RECEIPIENTS environment variable is not provided, the cluster name can be used to look up the encryption key from Lastpass.`)
 	cmd.Flags().StringVar(&f.InputFile, flagInputFile, "", `Path to file to encrypt`)
-	cmd.Flags().StringVar(&f.PublicKey, flagPublicKey, "", `Public encryption key`)
 }
 
 func (f *flags) Validate() error {
 	if f.InputFile == "" {
 		return microerror.Maskf(invalidFlagError, "--%s must not be empty", flagInputFile)
-	}
-	if f.PublicKey == "" {
-		return microerror.Maskf(invalidFlagError, "--%s must not be empty", flagPublicKey)
 	}
 
 	return nil

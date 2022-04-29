@@ -1,4 +1,4 @@
-package delete
+package writesopsconfig
 
 import (
 	"os"
@@ -8,8 +8,8 @@ import (
 )
 
 const (
-	name        = "delete"
-	description = `Deletes a management cluster encryption key in the password manager`
+	name        = "write-sops-config"
+	description = `Generate a sops config file (see https://github.com/mozilla/sops#using-sops-yaml-conf-to-select-kms-pgp-for-new-files) based on the provided SOPS_AGE_RECIPIENTS environment variable`
 )
 
 func New(config Config) (*cobra.Command, error) {
@@ -24,7 +24,6 @@ func New(config Config) (*cobra.Command, error) {
 	}
 
 	runner := Runner{
-		flag:   &flags{},
 		logger: config.Logger,
 		stderr: config.Stderr,
 		stdout: config.Stdout,
@@ -36,8 +35,6 @@ func New(config Config) (*cobra.Command, error) {
 		Long:  description,
 		RunE:  runner.Run,
 	}
-
-	runner.flag.Init(&command)
 
 	return &command, nil
 }

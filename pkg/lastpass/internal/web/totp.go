@@ -1,4 +1,4 @@
-package lastpass
+package web
 
 import (
 	"bytes"

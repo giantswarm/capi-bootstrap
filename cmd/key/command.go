@@ -7,12 +7,12 @@ import (
 	"github.com/spf13/cobra"
 
 	createcmd "github.com/giantswarm/capi-bootstrap/cmd/key/create"
-	deletecmd "github.com/giantswarm/capi-bootstrap/cmd/key/delete"
+	"github.com/giantswarm/capi-bootstrap/cmd/key/writesopsconfig"
 )
 
 const (
 	name        = "key"
-	description = `Commands for managing encryption keys`
+	description = `Commands for managing management cluster encryption keys`
 )
 
 func New(config Config) (*cobra.Command, error) {
@@ -39,10 +39,10 @@ func New(config Config) (*cobra.Command, error) {
 		}
 	}
 
-	var deleteCmd *cobra.Command
+	var writeSopsConfigCommand *cobra.Command
 	{
 		var err error
-		deleteCmd, err = deletecmd.New(deletecmd.Config{
+		writeSopsConfigCommand, err = writesopsconfig.New(writesopsconfig.Config{
 			Logger: config.Logger,
 			Stderr: config.Stderr,
 			Stdout: config.Stdout,
@@ -66,7 +66,7 @@ func New(config Config) (*cobra.Command, error) {
 	}
 
 	command.AddCommand(createCmd)
-	command.AddCommand(deleteCmd)
+	command.AddCommand(writeSopsConfigCommand)
 
 	return &command, nil
 }

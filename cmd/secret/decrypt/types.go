@@ -6,6 +6,13 @@ import (
 	"github.com/giantswarm/micrologger"
 )
 
+type Config struct {
+	Logger micrologger.Logger
+
+	Stderr io.Writer
+	Stdout io.Writer
+}
+
 type Runner struct {
 	flag *flags
 
@@ -13,11 +20,4 @@ type Runner struct {
 
 	stdout io.Writer
 	stderr io.Writer
-}
-
-type Config struct {
-	Logger micrologger.Logger
-
-	Stderr io.Writer
-	Stdout io.Writer
 }

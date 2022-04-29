@@ -1,4 +1,4 @@
-package sops
+package cli
 
 import "github.com/giantswarm/microerror"
 
@@ -18,4 +18,13 @@ var commandFailedError = &microerror.Error{
 // IsCommandFailed asserts commandFailedError.
 func IsCommandFailed(err error) bool {
 	return microerror.Cause(err) == commandFailedError
+}
+
+var notUniqueError = &microerror.Error{
+	Kind: "notUniqueError",
+}
+
+// IsNotUnique asserts notUniqueError.
+func IsNotUnique(err error) bool {
+	return microerror.Cause(err) == notUniqueError
 }
