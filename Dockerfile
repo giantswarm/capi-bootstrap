@@ -4,8 +4,8 @@ WORKDIR /binaries
 
 RUN apt-get update \
     && apt-get install -y ca-certificates curl jq
-COPY build.sh .
-RUN --mount=type=secret,id=github_token ./build.sh
+COPY docker-build.sh .
+RUN --mount=type=secret,id=github_token ./docker-build.sh
 
 FROM ubuntu
 
