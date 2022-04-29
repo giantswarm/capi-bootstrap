@@ -18,22 +18,15 @@ import (
 	"github.com/giantswarm/capi-bootstrap/pkg/templates"
 )
 
-const Name = "ca"
-
 func New(_ config.Config) (*Generator, error) {
 	return &Generator{}, nil
 }
 
 func (l Generator) Generate(_ context.Context, secret templates.TemplateSecret, installation templates.InstallationInputs) (interface{}, error) {
 	ca := &x509.Certificate{
-		SerialNumber: big.NewInt(2019),
+		SerialNumber: new(big.Int).SetInt64(0),
 		Subject: pkix.Name{
-			Organization:  []string{"Company, INC."},
-			Country:       []string{"US"},
-			Province:      []string{""},
-			Locality:      []string{"San Francisco"},
-			StreetAddress: []string{"Golden Gate Bridge"},
-			PostalCode:    []string{"94016"},
+			CommonName: "Kubernetes API",
 		},
 		NotBefore:             time.Now(),
 		NotAfter:              time.Now().AddDate(10, 0, 0),

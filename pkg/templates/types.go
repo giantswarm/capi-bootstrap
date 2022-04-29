@@ -18,10 +18,10 @@ type TemplateSecret struct {
 	Key       string `json:"key"`
 	Generator string `json:"generator"`
 
-	AWSIAM       *AWSIAMTemplateInputs      `json:"awsiam"`
-	GitHubOAuth  *GitHubOAuthTemplateInputs `json:"githuboauth,omitempty"`
-	Taylorbot    *TaylorbotTemplateInputs   `json:"taylorbot,omitempty"`
-	Lastpass     *LastpassTemplateInputs    `json:"lastpass,omitempty"`
+	AWSIAM      *AWSIAMTemplateInputs      `json:"awsiam"`
+	GitHubOAuth *GitHubOAuthTemplateInputs `json:"githuboauth,omitempty"`
+	Taylorbot   *TaylorbotTemplateInputs   `json:"taylorbot,omitempty"`
+	Lastpass    *LastpassTemplateInputs    `json:"lastpass,omitempty"`
 }
 
 type LastpassSecretRef struct {

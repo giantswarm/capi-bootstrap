@@ -10,8 +10,6 @@ import (
 	"github.com/giantswarm/capi-bootstrap/pkg/templates"
 )
 
-const Name = "githuboauth"
-
 func New(config config.Config) (*Generator, error) {
 	return &Generator{
 		client: config.LastpassClient,

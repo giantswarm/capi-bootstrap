@@ -12,8 +12,6 @@ import (
 	"github.com/giantswarm/capi-bootstrap/pkg/templates"
 )
 
-const Name = "awsiam"
-
 func New(config config.Config) (*Generator, error) {
 	return &Generator{
 		session: config.AWSSession,

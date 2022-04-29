@@ -10,6 +10,7 @@ import (
 	"github.com/giantswarm/capi-bootstrap/pkg/generator/generators/githuboauth"
 	"github.com/giantswarm/capi-bootstrap/pkg/generator/generators/lastpass"
 	"github.com/giantswarm/capi-bootstrap/pkg/generator/generators/taylorbot"
+	"github.com/giantswarm/capi-bootstrap/pkg/key"
 )
 
 func buildGenerators(config config.Config) (map[string]generator.Generator, error) {
@@ -20,7 +21,7 @@ func buildGenerators(config config.Config) (map[string]generator.Generator, erro
 		if err != nil {
 			return nil, microerror.Mask(err)
 		}
-		generators[awsiam.Name] = gen
+		generators[key.GeneratorNameAWSIAM] = gen
 	}
 
 	{
@@ -28,7 +29,7 @@ func buildGenerators(config config.Config) (map[string]generator.Generator, erro
 		if err != nil {
 			return nil, microerror.Mask(err)
 		}
-		generators[ca.Name] = gen
+		generators[key.GeneratorNameCA] = gen
 	}
 
 	{
@@ -36,7 +37,7 @@ func buildGenerators(config config.Config) (map[string]generator.Generator, erro
 		if err != nil {
 			return nil, microerror.Mask(err)
 		}
-		generators[githuboauth.Name] = gen
+		generators[key.GeneratorNameGitHubOAuth] = gen
 	}
 
 	{
@@ -44,7 +45,7 @@ func buildGenerators(config config.Config) (map[string]generator.Generator, erro
 		if err != nil {
 			return nil, microerror.Mask(err)
 		}
-		generators[lastpass.Name] = gen
+		generators[key.GeneratorNameLastpass] = gen
 	}
 
 	{
@@ -52,7 +53,7 @@ func buildGenerators(config config.Config) (map[string]generator.Generator, erro
 		if err != nil {
 			return nil, microerror.Mask(err)
 		}
-		generators[taylorbot.Name] = gen
+		generators[key.GeneratorNameTaylorbot] = gen
 	}
 
 	return generators, nil
