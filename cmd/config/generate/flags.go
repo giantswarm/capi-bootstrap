@@ -29,10 +29,10 @@ type flags struct {
 }
 
 func (f *flags) Init(cmd *cobra.Command) {
-	cmd.Flags().StringVar(&f.BaseDomain, flagBaseDomain, "", `Management cluster infrastructure provider`)
-	cmd.Flags().StringVar(&f.ClusterName, flagClusterName, "", `Management cluster infrastructure provider`)
-	cmd.Flags().StringVar(&f.Customer, flagCustomer, "", `Management cluster infrastructure provider`)
-	cmd.Flags().StringVar(&f.Pipeline, flagPipeline, "", `Management cluster infrastructure provider`)
+	cmd.Flags().StringVar(&f.BaseDomain, flagBaseDomain, "", `Base domain (usually <customer>.gigantic.io or test.gigantic.io for test installations)`)
+	cmd.Flags().StringVar(&f.ClusterName, flagClusterName, "", `Management cluster name`)
+	cmd.Flags().StringVar(&f.Customer, flagCustomer, "", `Management cluster customer`)
+	cmd.Flags().StringVar(&f.Pipeline, flagPipeline, "", `Management cluster pipeline. Should be "testing"" or "production"".`)
 	cmd.Flags().StringVar(&f.Provider, flagProvider, "", `Management cluster infrastructure provider`)
 
 	cmd.Flags().StringVar(&f.InstallationSecretsFile, flagInstallationSecretsFile, "", `Path to file containing installation secrets`)
