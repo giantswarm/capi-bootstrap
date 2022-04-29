@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
 
+- Add implementation for `key`, `secret`, `secrets`, and `config` commands.
 
 [Unreleased]: https://github.com/giantswarm/capi-bootstrap/tree/main
